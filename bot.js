@@ -28,6 +28,15 @@ const supabase = createClient(
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 console.log('🤖 ET Games bot running...');
 
+// ── Keep-alive HTTP server for Render ────────────────────────
+const http = require('http');
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Bot is running!');
+}).listen(process.env.PORT || 3000, () => {
+  console.log('✅ Health check server running');
+});
+
 // ── Helpers ───────────────────────────────────────────────────
 function generateToken(chatId, username) {
   return jwt.sign({ chatId: String(chatId), username }, JWT_SECRET, { expiresIn: '30d' });
