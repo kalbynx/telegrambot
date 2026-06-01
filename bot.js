@@ -178,29 +178,45 @@ async function registerUser(chatId, username, phoneNumber, referrerId = null) {
 }
 
 // ── Main Menu ─────────────────────────────────────────────────
+const BANNER_URL = process.env.BANNER_URL || ''
+
 async function sendMainMenu(chatId, username, balance, isNew) {
-  const homeUrl = buildUrl(HOME_URL, chatId, username);
+  const homeUrl = buildUrl(HOME_URL, chatId, username)
 
-  const greeting = isNew
-    ? `✅ *Registration complete\\!*\n\n👤 ${esc(username)}\n💰 Balance: *${esc(String(balance))} ETB*\n\nWelcome to ET Games\\!`
-    : `👋 Welcome back *${esc(username)}*\\!\n\n💰 Balance: *${esc(String(balance))} ETB*`;
+  const caption = isNew
+    ? `✅ Registration complete!
 
-  await bot.sendMessage(chatId, greeting, {
-    parse_mode: 'MarkdownV2',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '🎮 Open Game Hub', web_app: { url: homeUrl } }],
-        [
-          { text: '📊 Transactions',  callback_data: 'transactions' },
-          { text: '💰 Balance',       callback_data: 'balance' },
-        ],
-        [
-          { text: '🔗 Refer & Earn',  callback_data: 'refer' },
-          { text: '🆘 Support',       url: SUPPORT_URL },
-        ],
-      ]
-    }
-  });
+👤 ${username}
+💰 Balance: ${balance} ETB
+
+Welcome to ET Games! 🎮`
+    : `👋 Welcome back ${username}!
+
+💰 Balance: ${balance} ETB
+
+🎲 Ludo · 🃏 Crazy Card · 🎱 Bingo`
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '🎮 Open Game Hub', web_app: { url: homeUrl } }],
+      [
+        { text: '📊 Transactions', callback_data: 'transactions' },
+        { text: '💰 Balance',      callback_data: 'balance' },
+      ],
+      [
+        { text: '🔗 Refer & Earn', callback_data: 'refer' },
+        { text: '🆘 Support',      url: SUPPORT_URL },
+      ],
+    ]
+  }
+
+  if (BANNER_URL) {
+    try {
+      await bot.sendPhoto(chatId, BANNER_URL, { caption, reply_markup: keyboard })
+      return
+    } catch(e) { console.error('Photo send failed:', e.message) }
+  }
+  await bot.sendMessage(chatId, caption, { reply_markup: keyboard })
 }
 
 // ── /start ────────────────────────────────────────────────────
@@ -444,6 +460,20 @@ bot.on('contact', async (msg) => {
     await bot.sendMessage(chatId, '❌ Registration failed. Please try /start again.');
   }
 });
+
+// ── Admin: capture photo file_id ─────────────────────────────
+bot.on('photo', async (msg) => {
+  const chatId = String(msg.chat.id)
+  if (!ADMIN_IDS.includes(chatId)) return
+  const fileId = msg.photo[msg.photo.length - 1].file_id
+  process.env.BANNER_URL = fileId
+  await bot.sendMessage(chatId, `✅ Banner updated! Now live on /start
+
+To keep after restart add to env:
+BANNER_URL=${fileId}`)
+  const user = await getUser(chatId)
+  if (user) await sendMainMenu(chatId, user.username, user.balance, false)
+})
 
 // ── Errors ────────────────────────────────────────────────────
 bot.on('polling_error', e => console.error('Polling error:', e.message));
