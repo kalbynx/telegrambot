@@ -543,6 +543,72 @@ BANNER_URL=${fileId}`
   }
 })
 
+// ── /photocast (admin) — blast photo+caption to all users ────
+// Usage: Send a photo to the bot with caption starting with /photocast
+// Example caption: /photocast Big announcement! New game coming soon! 🎮
+bot.on('photo', async (msg) => {
+  const chatId  = String(msg.chat.id)
+  if (!ADMIN_IDS.includes(chatId)) return
+  const fileId  = msg.photo[msg.photo.length - 1].file_id
+  const caption = (msg.caption || '').trim()
+  const lower   = caption.toLowerCase()
+
+  // /photocast command — blast to all users
+  if (lower.startsWith('/photocast')) {
+    const text = caption.replace(/^\/photocast\s*/i, '').trim()
+    if (!text) return bot.sendMessage(chatId, '❌ Add a message after /photocast
+
+Example caption:
+/photocast Hello everyone! New update is live! 🎮')
+
+    const { data: users } = await supabase.from('users').select('chat_id')
+    if (!users?.length) return bot.sendMessage(chatId, '❌ No users found.')
+
+    await bot.sendMessage(chatId, `📢 Sending photo to ${users.length} users...`)
+
+    let sent = 0, failed = 0
+    for (const user of users) {
+      try {
+        await bot.sendPhoto(user.chat_id, fileId, {
+          caption: text,
+          parse_mode: 'HTML'
+        })
+        sent++
+      } catch { failed++ }
+      await new Promise(r => setTimeout(r, 60))
+    }
+    await bot.sendMessage(chatId, `✅ Done!
+✓ Sent: ${sent}
+✗ Failed: ${failed}`)
+    return
+  }
+
+  // welcome → update welcome banner
+  if (lower.includes('welcome')) {
+    WELCOME_BANNER = fileId
+    await bot.sendMessage(chatId,
+      `✅ Welcome bonus photo updated!
+
+New users will see this when they register.
+
+To keep after restart:
+WELCOME_BANNER=${fileId}`
+    )
+    return
+  }
+
+  // no caption or other caption → update main menu banner
+  process.env.BANNER_URL = fileId
+  await bot.sendMessage(chatId,
+    `✅ Main menu banner updated!
+
+To keep after restart:
+BANNER_URL=${fileId}`
+  )
+  const user = await getUser(chatId)
+  if (user) await sendMainMenu(chatId, user.username, user.balance, false)
+})
+
 // ── Errors ────────────────────────────────────────────────────
 bot.on('polling_error', e => console.error('Polling error:', e.message));
 process.on('uncaughtException',  e => console.error('Uncaught:', e));
