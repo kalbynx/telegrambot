@@ -455,6 +455,55 @@ bot.on('contact', async (msg) => {
     await bot.sendMessage(chatId, '✅ Phone number received!', {
       reply_markup: { remove_keyboard: true }
     });
+
+    // ── Welcome bonus for new users ───────────────────────────
+    if (isNew) {
+      try {
+        const adminToken = jwt.sign(
+          { chatId: 'system', username: 'bot', isAdmin: true },
+          JWT_SECRET, { expiresIn: '1h' }
+        )
+        const bonusRes = await fetch(`${WALLET_URL}/api/credit`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: String(chatId), username,
+            transaction_type: 'credit', amount: 10,
+            description: 'Welcome bonus — first time registration',
+            transaction_id: `WELCOME_${chatId}_${Date.now()}`
+          })
+        })
+        const bonusData = await bonusRes.json()
+        user.balance = bonusData.new_balance || 10
+
+        const welcomeCaption =
+          `🎉 *Welcome to ET Games!*
+
+` +
+          `You have received a *FREE 10 ETB* welcome bonus! 🎁
+
+` +
+          `Your balance is now *${user.balance} ETB* — start playing now and win big! 💰
+
+` +
+          `🎲 Ludo · 🃏 Crazy Card · 🎱 Bingo`
+
+        const welcomeKeyboard = { inline_keyboard: [[
+          { text: '🎮 Play Now!', web_app: { url: buildUrl(HOME_URL, chatId, username) } }
+        ]]}
+
+        if (WELCOME_BANNER) {
+          try {
+            await bot.sendPhoto(chatId, WELCOME_BANNER, { caption: welcomeCaption, parse_mode: 'Markdown', reply_markup: welcomeKeyboard })
+          } catch {
+            await bot.sendMessage(chatId, welcomeCaption, { parse_mode: 'Markdown', reply_markup: welcomeKeyboard })
+          }
+        } else {
+          await bot.sendMessage(chatId, welcomeCaption, { parse_mode: 'Markdown', reply_markup: welcomeKeyboard })
+        }
+      } catch (e) { console.error('Welcome bonus error:', e.message) }
+    }
+
     await sendMainMenu(chatId, username, user.balance, isNew);
   } catch (e) {
     console.error('Contact error:', e);
@@ -462,18 +511,36 @@ bot.on('contact', async (msg) => {
   }
 });
 
-// ── Admin: capture photo file_id ─────────────────────────────
+// ── Admin: send photo to update banners ──────────────────────
+// Send with caption "welcome" → updates welcome bonus photo
+// Send without caption → updates main menu banner
 bot.on('photo', async (msg) => {
-  const chatId = String(msg.chat.id)
+  const chatId  = String(msg.chat.id)
   if (!ADMIN_IDS.includes(chatId)) return
-  const fileId = msg.photo[msg.photo.length - 1].file_id
-  process.env.BANNER_URL = fileId
-  await bot.sendMessage(chatId, `✅ Banner updated! Now live on /start
+  const fileId  = msg.photo[msg.photo.length - 1].file_id
+  const caption = (msg.caption || '').toLowerCase()
+
+  if (caption.includes('welcome')) {
+    WELCOME_BANNER = fileId
+    await bot.sendMessage(chatId,
+      `✅ Welcome bonus photo updated!
+
+New users will see this when they register.
 
 To keep after restart add to env:
-BANNER_URL=${fileId}`)
-  const user = await getUser(chatId)
-  if (user) await sendMainMenu(chatId, user.username, user.balance, false)
+WELCOME_BANNER=${fileId}`
+    )
+  } else {
+    process.env.BANNER_URL = fileId
+    await bot.sendMessage(chatId,
+      `✅ Main menu banner updated!
+
+To keep after restart add to env:
+BANNER_URL=${fileId}`
+    )
+    const user = await getUser(chatId)
+    if (user) await sendMainMenu(chatId, user.username, user.balance, false)
+  }
 })
 
 // ── Errors ────────────────────────────────────────────────────
