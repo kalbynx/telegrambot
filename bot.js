@@ -90,17 +90,19 @@ async function creditUser(chatId, username, amount, description) {
   const adminToken = jwt.sign(
     { chatId: 'system', username: 'bot', isAdmin: true },
     JWT_SECRET, { expiresIn: '1h' }
-  );
+  )
+  const txId = `BONUS_${chatId}_${Date.now()}`
   const res = await fetch(`${WALLET_URL}/api/credit`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       user_id: String(chatId), username,
       transaction_type: 'credit', amount,
-      description, transaction_id: `BONUS_${chatId}_${Date.now()}`
+      game: 'bonus', round_id: txId,
+      transaction_id: txId
     })
-  });
-  return res.json();
+  })
+  return res.json()
 }
 
 // ── Referral helpers ──────────────────────────────────────────
@@ -469,7 +471,8 @@ bot.on('contact', async (msg) => {
           body: JSON.stringify({
             user_id: String(chatId), username,
             transaction_type: 'credit', amount: 10,
-            description: 'Welcome bonus — first time registration',
+            game: 'bonus',
+            round_id: `WELCOME_${chatId}`,
             transaction_id: `WELCOME_${chatId}_${Date.now()}`
           })
         })
