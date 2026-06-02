@@ -178,7 +178,8 @@ async function registerUser(chatId, username, phoneNumber, referrerId = null) {
 }
 
 // ── Main Menu ─────────────────────────────────────────────────
-const BANNER_URL = process.env.BANNER_URL || ''
+const BANNER_URL   = process.env.BANNER_URL || ''
+let WELCOME_BANNER = process.env.WELCOME_BANNER || ''
 
 async function sendMainMenu(chatId, username, balance, isNew) {
   const homeUrl = buildUrl(HOME_URL, chatId, username)
