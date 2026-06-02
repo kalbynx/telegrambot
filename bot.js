@@ -556,10 +556,7 @@ bot.on('photo', async (msg) => {
   // /photocast command — blast to all users
   if (lower.startsWith('/photocast')) {
     const text = caption.replace(/^\/photocast\s*/i, '').trim()
-    if (!text) return bot.sendMessage(chatId, '❌ Add a message after /photocast
-
-Example caption:
-/photocast Hello everyone! New update is live! 🎮')
+    if (!text) return bot.sendMessage(chatId, '❌ Add a message after /photocast\n\nExample caption:\n/photocast Hello everyone! New update is live! 🎮')
 
     const { data: users } = await supabase.from('users').select('chat_id')
     if (!users?.length) return bot.sendMessage(chatId, '❌ No users found.')
