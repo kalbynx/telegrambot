@@ -459,7 +459,8 @@ bot.on('contact', async (msg) => {
     });
 
     // ── Welcome bonus for new users ───────────────────────────
-    if (isNew) {
+    const WELCOME_BONUS_ENABLED = process.env.WELCOME_BONUS !== 'false'
+    if (isNew && WELCOME_BONUS_ENABLED) {
       try {
         const adminToken = jwt.sign(
           { chatId: 'system', username: 'bot', isAdmin: true },
