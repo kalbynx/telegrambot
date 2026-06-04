@@ -491,10 +491,8 @@ bot.onText(/\/top/, async (msg) => {
     const { data: txCounts } = await supabase.from('transactions').select('username').eq('transaction_type', 'debit').eq('status', 'success')
     const counts = {}
     ;(txCounts||[]).forEach(t => { counts[t.username] = (counts[t.username]||0)+1 })
-    const activeList = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([name,count],i) => `${i+1}. ${name||'?'} — <b>${count} games</b>`).join('
-')
-    const richList = (richest||[]).map((u,i) => `${i+1}. ${u.username||'?'} — <b>${parseFloat(u.balance||0).toFixed(2)} ETB</b>`).join('
-')
+    const activeList = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([name,count],i) => `${i+1}. ${name||'?'} — <b>${count} games</b>`).join('\n')
+    const richList = (richest||[]).map((u,i) => `${i+1}. ${u.username||'?'} — <b>${parseFloat(u.balance||0).toFixed(2)} ETB</b>`).join('\n')
     await bot.sendMessage(chatId,
       `🏆 <b>Top Players</b>
 
@@ -545,15 +543,9 @@ bot.onText(/\/pending/, async (msg) => {
     const lines = withdrawals.map((w,i) => {
       const approveUrl = `https://wallet-api-rdxt.onrender.com/api/withdraw/${w.id}/complete-notify`
       const rejectUrl  = `https://wallet-api-rdxt.onrender.com/api/withdraw/${w.id}/reject-notify`
-      return `${i+1}. <b>${w.username}</b> — ${w.amount} ETB to ${w.phone}
-<a href="${approveUrl}">✅ Approve</a> | <a href="${rejectUrl}">❌ Reject</a>`
-    }).join('
-
-')
-    await bot.sendMessage(chatId, `🏧 <b>Pending (${withdrawals.length})</b>
-Total: <b>${total.toFixed(2)} ETB</b>
-
-${lines}`, { parse_mode: 'HTML', disable_web_page_preview: true })
+      return `${i+1}. <b>${w.username}</b> — ${w.amount} ETB to ${w.phone}\n<a href="${approveUrl}">✅ Approve</a> | <a href="${rejectUrl}">❌ Reject</a>`
+    }).join('\n\n')
+    await bot.sendMessage(chatId, `🏧 <b>Pending (${withdrawals.length})</b>\nTotal: <b>${total.toFixed(2)} ETB</b>\n\n${lines}`, { parse_mode: 'HTML', disable_web_page_preview: true })
   } catch(e) { bot.sendMessage(chatId, '❌ Error: ' + e.message) }
 })
 
