@@ -424,6 +424,139 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
 });
 
 // ── Callback queries ──────────────────────────────────────────
+// ── /stats (admin) ───────────────────────────────────────────
+bot.onText(/\/stats/, async (msg) => {
+  const chatId = String(msg.chat.id)
+  if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.')
+  try {
+    const [
+      { count: totalUsers },
+      { data: txs },
+      { data: withdrawals },
+      { data: referrals }
+    ] = await Promise.all([
+      supabase.from('users').select('*', { count: 'exact', head: true }),
+      supabase.from('transactions').select('transaction_type,amount,game').eq('status', 'success'),
+      supabase.from('withdrawals').select('amount,status'),
+      supabase.from('referrals').select('status').catch(() => ({ data: [] }))
+    ])
+    const allTxs  = txs || []
+    const deposits = allTxs.filter(t => t.transaction_type==='deposit').reduce((s,t)=>s+parseFloat(t.amount||0),0)
+    const debits   = allTxs.filter(t => t.transaction_type==='debit').reduce((s,t)=>s+parseFloat(t.amount||0),0)
+    const credits  = allTxs.filter(t => t.transaction_type==='credit').reduce((s,t)=>s+parseFloat(t.amount||0),0)
+    const profit   = debits - credits
+    const withdrawn = (withdrawals||[]).filter(w=>w.status==='completed').reduce((s,w)=>s+parseFloat(w.amount||0),0)
+    const pendingW  = (withdrawals||[]).filter(w=>w.status==='pending').reduce((s,w)=>s+parseFloat(w.amount||0),0)
+    const rewarded  = (referrals||[]).filter(r=>r.status==='rewarded').length
+    const ludoP  = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='ludo').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='ludo').reduce((s,t)=>s+parseFloat(t.amount||0),0)
+    const crazyP = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='crazy').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='crazy').reduce((s,t)=>s+parseFloat(t.amount||0),0)
+    const bingoP = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='bingo').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='bingo').reduce((s,t)=>s+parseFloat(t.amount||0),0)
+    await bot.sendMessage(chatId,
+      `📊 <b>ET Games Stats</b>
+
+` +
+      `👥 Users: <b>${totalUsers}</b>
+` +
+      `💳 Deposits: <b>${deposits.toFixed(2)} ETB</b>
+` +
+      `📈 Debits: <b>${debits.toFixed(2)} ETB</b>
+` +
+      `📉 Credits: <b>${credits.toFixed(2)} ETB</b>
+` +
+      `💰 Net Profit: <b>${profit.toFixed(2)} ETB</b>
+
+` +
+      `🏧 Withdrawn: <b>${withdrawn.toFixed(2)} ETB</b>
+` +
+      `⏳ Pending: <b>${pendingW.toFixed(2)} ETB</b>
+` +
+      `🔗 Referrals Paid: <b>${rewarded}</b>
+
+` +
+      `🎮 <b>Per Game:</b>
+🎲 Ludo: ${ludoP.toFixed(2)} ETB
+🃏 Crazy: ${crazyP.toFixed(2)} ETB
+🎱 Bingo: ${bingoP.toFixed(2)} ETB`,
+      { parse_mode: 'HTML' }
+    )
+  } catch(e) { bot.sendMessage(chatId, '❌ Error: ' + e.message) }
+})
+
+// ── /top (admin) ──────────────────────────────────────────────
+bot.onText(/\/top/, async (msg) => {
+  const chatId = String(msg.chat.id)
+  if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.')
+  try {
+    const { data: richest } = await supabase.from('users').select('username,balance').order('balance', { ascending: false }).limit(10)
+    const { data: txCounts } = await supabase.from('transactions').select('username').eq('transaction_type', 'debit').eq('status', 'success')
+    const counts = {}
+    ;(txCounts||[]).forEach(t => { counts[t.username] = (counts[t.username]||0)+1 })
+    const activeList = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([name,count],i) => `${i+1}. ${name||'?'} — <b>${count} games</b>`).join('
+')
+    const richList = (richest||[]).map((u,i) => `${i+1}. ${u.username||'?'} — <b>${parseFloat(u.balance||0).toFixed(2)} ETB</b>`).join('
+')
+    await bot.sendMessage(chatId,
+      `🏆 <b>Top Players</b>
+
+💰 <b>Richest:</b>
+${richList||'—'}
+
+🎮 <b>Most Active:</b>
+${activeList||'—'}`,
+      { parse_mode: 'HTML' }
+    )
+  } catch(e) { bot.sendMessage(chatId, '❌ Error: ' + e.message) }
+})
+
+// ── /finduser (admin) ─────────────────────────────────────────
+bot.onText(/\/finduser (.+)/, async (msg, match) => {
+  const chatId = String(msg.chat.id)
+  if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.')
+  const query = match[1].trim()
+  try {
+    const { data: users } = await supabase.from('users').select('*').or(`username.ilike.%${query}%,chat_id.ilike.%${query}%,phone_number.ilike.%${query}%`).limit(5)
+    if (!users?.length) return bot.sendMessage(chatId, `❌ No user found for: ${query}`)
+    for (const u of users) {
+      const { data: txs } = await supabase.from('transactions').select('transaction_type,amount').eq('user_id', u.chat_id).eq('status', 'success')
+      const games     = (txs||[]).filter(t=>t.transaction_type==='debit').length
+      const deposited = (txs||[]).filter(t=>t.transaction_type==='deposit').reduce((s,t)=>s+parseFloat(t.amount||0),0)
+      await bot.sendMessage(chatId,
+        `👤 <b>${u.username||'Unknown'}</b>
+🆔 <code>${u.chat_id}</code>
+📱 ${u.phone_number||'—'}
+💰 Balance: <b>${parseFloat(u.balance||0).toFixed(2)} ETB</b>
+💳 Deposited: <b>${deposited.toFixed(2)} ETB</b>
+🎮 Games: <b>${games}</b>
+📅 Joined: ${u.created_at?new Date(u.created_at).toLocaleDateString():'—'}`,
+        { parse_mode: 'HTML' }
+      )
+    }
+  } catch(e) { bot.sendMessage(chatId, '❌ Error: ' + e.message) }
+})
+
+// ── /pending (admin) ──────────────────────────────────────────
+bot.onText(/\/pending/, async (msg) => {
+  const chatId = String(msg.chat.id)
+  if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.')
+  try {
+    const { data: withdrawals } = await supabase.from('withdrawals').select('*').eq('status', 'pending').order('created_at', { ascending: false })
+    if (!withdrawals?.length) return bot.sendMessage(chatId, '✅ No pending withdrawals!')
+    const total = withdrawals.reduce((s,w)=>s+parseFloat(w.amount||0),0)
+    const lines = withdrawals.map((w,i) => {
+      const approveUrl = `https://wallet-api-rdxt.onrender.com/api/withdraw/${w.id}/complete-notify`
+      const rejectUrl  = `https://wallet-api-rdxt.onrender.com/api/withdraw/${w.id}/reject-notify`
+      return `${i+1}. <b>${w.username}</b> — ${w.amount} ETB to ${w.phone}
+<a href="${approveUrl}">✅ Approve</a> | <a href="${rejectUrl}">❌ Reject</a>`
+    }).join('
+
+')
+    await bot.sendMessage(chatId, `🏧 <b>Pending (${withdrawals.length})</b>
+Total: <b>${total.toFixed(2)} ETB</b>
+
+${lines}`, { parse_mode: 'HTML', disable_web_page_preview: true })
+  } catch(e) { bot.sendMessage(chatId, '❌ Error: ' + e.message) }
+})
+
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   await bot.answerCallbackQuery(query.id);
