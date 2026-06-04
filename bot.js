@@ -429,16 +429,17 @@ bot.onText(/\/stats/, async (msg) => {
   const chatId = String(msg.chat.id)
   if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.')
   try {
+    const safe = async (fn) => { try { return await fn() } catch { return { data: [], count: 0 } } }
     const [
       { count: totalUsers },
       { data: txs },
       { data: withdrawals },
       { data: referrals }
     ] = await Promise.all([
-      supabase.from('users').select('*', { count: 'exact', head: true }),
-      supabase.from('transactions').select('transaction_type,amount,game').eq('status', 'success'),
-      supabase.from('withdrawals').select('amount,status'),
-      supabase.from('referrals').select('status').catch(() => ({ data: [] }))
+      safe(() => supabase.from('users').select('*', { count: 'exact', head: true })),
+      safe(() => supabase.from('transactions').select('transaction_type,amount,game').eq('status', 'success')),
+      safe(() => supabase.from('withdrawals').select('amount,status')),
+      safe(() => supabase.from('referrals').select('status'))
     ])
     const allTxs  = txs || []
     const deposits = allTxs.filter(t => t.transaction_type==='deposit').reduce((s,t)=>s+parseFloat(t.amount||0),0)
