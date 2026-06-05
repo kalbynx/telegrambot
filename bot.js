@@ -466,11 +466,13 @@ bot.onText(/\/stats/, async (msg) => {
           .or('player1_phone.like.BOT_%,player2_phone.like.BOT_%')
 
         if (botGames) {
-          botGamesPlayed = botGames.length
           for (const g of botGames) {
-            if (!g.bet || !g.player1_bet_deducted || !g.player2_bet_deducted) continue
             const botIsP1 = String(g.player1_phone).startsWith('BOT_')
-            const botIsP2 = String(g.player2_phone).startsWith('BOT_')
+            const botIsP2 = String(g.player2_phone || '').startsWith('BOT_')
+            // Skip bot vs bot games — only count games with one real player
+            if (botIsP1 && botIsP2) continue
+            if (!g.bet || !g.player1_bet_deducted || !g.player2_bet_deducted) continue
+            botGamesPlayed++
             const botPlayer = botIsP1 ? 'player1' : 'player2'
             const botWinner = g.winner === botPlayer
             if (botWinner) botWon += parseFloat(g.bet) * 1.8
