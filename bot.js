@@ -452,6 +452,36 @@ bot.onText(/\/stats/, async (msg) => {
     const ludoP  = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='ludo').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='ludo').reduce((s,t)=>s+parseFloat(t.amount||0),0)
     const crazyP = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='crazy').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='crazy').reduce((s,t)=>s+parseFloat(t.amount||0),0)
     const bingoP = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='bingo').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='bingo').reduce((s,t)=>s+parseFloat(t.amount||0),0)
+    // ── Bot player stats from ludo_game table ────────────────
+    let botGamesPlayed = 0, botLost = 0, botWon = 0
+    try {
+      const ludoSupaUrl = process.env.LUDO_SUPABASE_URL
+      const ludoSupaKey = process.env.LUDO_SUPABASE_SERVICE_ROLE_KEY
+      if (ludoSupaUrl && ludoSupaKey) {
+        const { createClient } = require('@supabase/supabase-js')
+        const ludoSupa = createClient(ludoSupaUrl, ludoSupaKey)
+        const { data: botGames } = await ludoSupa.from('ludo_game')
+          .select('bet,winner,player1_phone,player2_phone,player1_bet_deducted,player2_bet_deducted')
+          .eq('status', 'finished')
+          .or('player1_phone.like.BOT_%,player2_phone.like.BOT_%')
+
+        if (botGames) {
+          botGamesPlayed = botGames.length
+          for (const g of botGames) {
+            if (!g.bet || !g.player1_bet_deducted || !g.player2_bet_deducted) continue
+            const botIsP1 = String(g.player1_phone).startsWith('BOT_')
+            const botIsP2 = String(g.player2_phone).startsWith('BOT_')
+            const botPlayer = botIsP1 ? 'player1' : 'player2'
+            const botWinner = g.winner === botPlayer
+            if (botWinner) botWon += parseFloat(g.bet) * 1.8
+            else botLost += parseFloat(g.bet)
+          }
+        }
+      }
+    } catch(e) { console.error('Bot stats error:', e.message) }
+
+    const botNet = botLost - botWon // positive = house gained from bots losing
+
     await bot.sendMessage(chatId,
       `📊 <b>ET Games Stats</b>
 
@@ -477,7 +507,18 @@ bot.onText(/\/stats/, async (msg) => {
       `🎮 <b>Per Game:</b>
 🎲 Ludo: ${ludoP.toFixed(2)} ETB
 🃏 Crazy: ${crazyP.toFixed(2)} ETB
-🎱 Bingo: ${bingoP.toFixed(2)} ETB`,
+🎱 Bingo: ${bingoP.toFixed(2)} ETB
+
+` +
+      `🤖 <b>Bot Activity:</b>
+` +
+      `🎲 Games with bots: <b>${botGamesPlayed}</b>
+` +
+      `💸 Bots paid out (won): <b>${botWon.toFixed(2)} ETB</b>
+` +
+      `✅ Bets collected from bots: <b>${botLost.toFixed(2)} ETB</b>
+` +
+      `📊 Net from bots: <b>${botNet.toFixed(2)} ETB</b>`,
       { parse_mode: 'HTML' }
     )
   } catch(e) { bot.sendMessage(chatId, '❌ Error: ' + e.message) }
