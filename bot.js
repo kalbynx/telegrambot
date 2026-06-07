@@ -105,11 +105,24 @@ async function creditUser(chatId, username, amount, description) {
   return res.json()
 }
 
+// ── Paginated user fetch ──────────────────────────────────────
+async function getAllUsers() {
+  const users = [];
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    const { data, error } = await supabase.from('users').select('chat_id').range(from, from + PAGE - 1);
+    if (error || !data?.length) break;
+    users.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return users;
+}
+
 // ── Referral helpers ──────────────────────────────────────────
 async function registerReferral(referrerId, referredId) {
-  // Don't refer yourself
   if (String(referrerId) === String(referredId)) return;
-  // Check if already referred
   const { data: existing } = await supabase.from('referrals')
     .select('id').eq('referred_id', String(referredId)).single();
   if (existing) return;
@@ -123,25 +136,20 @@ async function registerReferral(referrerId, referredId) {
 }
 
 async function rewardReferrer(referredId) {
-  // Find pending referral for this user
   const { data: referral } = await supabase.from('referrals')
     .select('*').eq('referred_id', String(referredId)).eq('status', 'pending').single();
   if (!referral) return;
 
-  // Get referrer info
   const referrer = await getUser(referral.referrer_id);
   if (!referrer) return;
 
-  // Credit referrer
   await creditUser(referrer.chat_id, referrer.username, REFERRAL_BONUS,
     `Referral bonus — invited ${referredId}`);
 
-  // Mark as rewarded
   await supabase.from('referrals').update({
     status: 'rewarded', rewarded_at: new Date().toISOString()
   }).eq('id', referral.id);
 
-  // Notify referrer
   await bot.sendMessage(referrer.chat_id,
     `🎉 Your referral bonus has arrived!\n\n` +
     `💰 +${REFERRAL_BONUS} ETB added to your balance.\n` +
@@ -173,7 +181,6 @@ async function registerUser(chatId, username, phoneNumber, referrerId = null) {
 
   if (error) throw new Error(`Registration failed: ${error.message}`);
 
-  // Register referral if came from one
   if (referrerId) await registerReferral(referrerId, chatId);
 
   return { user: newUser, isNew: true };
@@ -187,17 +194,8 @@ async function sendMainMenu(chatId, username, balance, isNew) {
   const homeUrl = buildUrl(HOME_URL, chatId, username)
 
   const caption = isNew
-    ? `✅ Registration complete!
-
-👤 ${username}
-💰 Balance: ${balance} ETB
-
-Welcome to ET Games! 🎮`
-    : `👋 Welcome back ${username}!
-
-💰 Balance: ${balance} ETB
-
-🎲 Ludo · 🃏 Crazy Card · 🎱 Bingo`
+    ? `✅ Registration complete!\n\n👤 ${username}\n💰 Balance: ${balance} ETB\n\nWelcome to ET Games! 🎮`
+    : `👋 Welcome back ${username}!\n\n💰 Balance: ${balance} ETB\n\n🎲 Ludo · 🃏 Crazy Card · 🎱 Bingo`
 
   const keyboard = {
     inline_keyboard: [
@@ -226,9 +224,8 @@ Welcome to ET Games! 🎮`
 bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
   const chatId   = msg.chat.id;
   const username = msg.from.username || msg.from.first_name || `User${String(chatId).slice(-4)}`;
-  const param    = match?.[1]?.trim(); // e.g. REF_1133538088
+  const param    = match?.[1]?.trim();
 
-  // Extract referrer ID
   let referrerId = null;
   if (param?.startsWith('REF_')) {
     referrerId = param.replace('REF_', '');
@@ -244,9 +241,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
       return;
     }
 
-    // If came via referral, store it temporarily
     if (referrerId && !user) {
-      // Store in supabase temporarily or just pass through registration
       await bot.sendMessage(chatId,
         `👋 Welcome to *ET Games*\\!\n\nYou were invited by a friend 🎉\n\nShare your phone number to register and your friend gets *${REFERRAL_BONUS} ETB* when you make your first deposit\\.`,
         {
@@ -257,7 +252,6 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
           }
         }
       );
-      // Store referrerId temporarily in a map
       pendingReferrals.set(String(chatId), referrerId);
     } else {
       await bot.sendMessage(chatId,
@@ -410,25 +404,8 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
   if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.');
   const text = match[1];
 
-  
-const users = []
-let from = 0
-const PAGE = 1000
-while (true) {
-  const { data, error } = await supabase.from('users').select('chat_id').range(from, from + PAGE - 1)
-  if (error || !data?.length) break
-  users.push(...data)
-  if (data.length < PAGE) break
-  from += PAGE
-}
-if (!users.length) return bot.sendMessage(chatId, '❌ No users found.')
-
-
-
-
-
-
-
+  const users = await getAllUsers();
+  if (!users.length) return bot.sendMessage(chatId, '❌ No users found.');
 
   let sent = 0, failed = 0;
   await bot.sendMessage(chatId, `📢 Broadcasting to ${users.length} users...`);
@@ -442,8 +419,7 @@ if (!users.length) return bot.sendMessage(chatId, '❌ No users found.')
   await bot.sendMessage(chatId, `✅ Done! Sent: ${sent} | Failed: ${failed}`);
 });
 
-// ── Callback queries ──────────────────────────────────────────
-// ── /stats (admin) ───────────────────────────────────────────
+// ── /stats (admin) ────────────────────────────────────────────
 bot.onText(/\/stats/, async (msg) => {
   const chatId = String(msg.chat.id)
   if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.')
@@ -471,7 +447,7 @@ bot.onText(/\/stats/, async (msg) => {
     const ludoP  = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='ludo').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='ludo').reduce((s,t)=>s+parseFloat(t.amount||0),0)
     const crazyP = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='crazy').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='crazy').reduce((s,t)=>s+parseFloat(t.amount||0),0)
     const bingoP = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='bingo').reduce((s,t)=>s+parseFloat(t.amount||0),0) - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='bingo').reduce((s,t)=>s+parseFloat(t.amount||0),0)
-    // ── Bot player stats from ludo_game table ────────────────
+
     let botGamesPlayed = 0, botLost = 0, botWon = 0
     try {
       const ludoSupaUrl = process.env.LUDO_SUPABASE_URL
@@ -488,7 +464,6 @@ bot.onText(/\/stats/, async (msg) => {
           for (const g of botGames) {
             const botIsP1 = String(g.player1_phone).startsWith('BOT_')
             const botIsP2 = String(g.player2_phone || '').startsWith('BOT_')
-            // Skip bot vs bot games — only count games with one real player
             if (botIsP1 && botIsP2) continue
             if (!g.bet || !g.player1_bet_deducted || !g.player2_bet_deducted) continue
             botGamesPlayed++
@@ -501,44 +476,23 @@ bot.onText(/\/stats/, async (msg) => {
       }
     } catch(e) { console.error('Bot stats error:', e.message) }
 
-    const botNet = botLost - botWon // positive = house gained from bots losing
+    const botNet = botLost - botWon
 
     await bot.sendMessage(chatId,
-      `📊 <b>ET Games Stats</b>
-
-` +
-      `👥 Users: <b>${totalUsers}</b>
-` +
-      `💳 Deposits: <b>${deposits.toFixed(2)} ETB</b>
-` +
-      `📈 Debits: <b>${debits.toFixed(2)} ETB</b>
-` +
-      `📉 Credits: <b>${credits.toFixed(2)} ETB</b>
-` +
-      `💰 Net Profit: <b>${profit.toFixed(2)} ETB</b>
-
-` +
-      `🏧 Withdrawn: <b>${withdrawn.toFixed(2)} ETB</b>
-` +
-      `⏳ Pending: <b>${pendingW.toFixed(2)} ETB</b>
-` +
-      `🔗 Referrals Paid: <b>${rewarded}</b>
-
-` +
-      `🎮 <b>Per Game:</b>
-🎲 Ludo: ${ludoP.toFixed(2)} ETB
-🃏 Crazy: ${crazyP.toFixed(2)} ETB
-🎱 Bingo: ${bingoP.toFixed(2)} ETB
-
-` +
-      `🤖 <b>Bot Activity:</b>
-` +
-      `🎲 Games with bots: <b>${botGamesPlayed}</b>
-` +
-      `💸 Bots paid out (won): <b>${botWon.toFixed(2)} ETB</b>
-` +
-      `✅ Bets collected from bots: <b>${botLost.toFixed(2)} ETB</b>
-` +
+      `📊 <b>ET Games Stats</b>\n\n` +
+      `👥 Users: <b>${totalUsers}</b>\n` +
+      `💳 Deposits: <b>${deposits.toFixed(2)} ETB</b>\n` +
+      `📈 Debits: <b>${debits.toFixed(2)} ETB</b>\n` +
+      `📉 Credits: <b>${credits.toFixed(2)} ETB</b>\n` +
+      `💰 Net Profit: <b>${profit.toFixed(2)} ETB</b>\n\n` +
+      `🏧 Withdrawn: <b>${withdrawn.toFixed(2)} ETB</b>\n` +
+      `⏳ Pending: <b>${pendingW.toFixed(2)} ETB</b>\n` +
+      `🔗 Referrals Paid: <b>${rewarded}</b>\n\n` +
+      `🎮 <b>Per Game:</b>\n🎲 Ludo: ${ludoP.toFixed(2)} ETB\n🃏 Crazy: ${crazyP.toFixed(2)} ETB\n🎱 Bingo: ${bingoP.toFixed(2)} ETB\n\n` +
+      `🤖 <b>Bot Activity:</b>\n` +
+      `🎲 Games with bots: <b>${botGamesPlayed}</b>\n` +
+      `💸 Bots paid out (won): <b>${botWon.toFixed(2)} ETB</b>\n` +
+      `✅ Bets collected from bots: <b>${botLost.toFixed(2)} ETB</b>\n` +
       `📊 Net from bots: <b>${botNet.toFixed(2)} ETB</b>`,
       { parse_mode: 'HTML' }
     )
@@ -557,13 +511,7 @@ bot.onText(/\/top/, async (msg) => {
     const activeList = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([name,count],i) => `${i+1}. ${name||'?'} — <b>${count} games</b>`).join('\n')
     const richList = (richest||[]).map((u,i) => `${i+1}. ${u.username||'?'} — <b>${parseFloat(u.balance||0).toFixed(2)} ETB</b>`).join('\n')
     await bot.sendMessage(chatId,
-      `🏆 <b>Top Players</b>
-
-💰 <b>Richest:</b>
-${richList||'—'}
-
-🎮 <b>Most Active:</b>
-${activeList||'—'}`,
+      `🏆 <b>Top Players</b>\n\n💰 <b>Richest:</b>\n${richList||'—'}\n\n🎮 <b>Most Active:</b>\n${activeList||'—'}`,
       { parse_mode: 'HTML' }
     )
   } catch(e) { bot.sendMessage(chatId, '❌ Error: ' + e.message) }
@@ -582,13 +530,7 @@ bot.onText(/\/finduser (.+)/, async (msg, match) => {
       const games     = (txs||[]).filter(t=>t.transaction_type==='debit').length
       const deposited = (txs||[]).filter(t=>t.transaction_type==='deposit').reduce((s,t)=>s+parseFloat(t.amount||0),0)
       await bot.sendMessage(chatId,
-        `👤 <b>${u.username||'Unknown'}</b>
-🆔 <code>${u.chat_id}</code>
-📱 ${u.phone_number||'—'}
-💰 Balance: <b>${parseFloat(u.balance||0).toFixed(2)} ETB</b>
-💳 Deposited: <b>${deposited.toFixed(2)} ETB</b>
-🎮 Games: <b>${games}</b>
-📅 Joined: ${u.created_at?new Date(u.created_at).toLocaleDateString():'—'}`,
+        `👤 <b>${u.username||'Unknown'}</b>\n🆔 <code>${u.chat_id}</code>\n📱 ${u.phone_number||'—'}\n💰 Balance: <b>${parseFloat(u.balance||0).toFixed(2)} ETB</b>\n💳 Deposited: <b>${deposited.toFixed(2)} ETB</b>\n🎮 Games: <b>${games}</b>\n📅 Joined: ${u.created_at?new Date(u.created_at).toLocaleDateString():'—'}`,
         { parse_mode: 'HTML' }
       )
     }
@@ -612,6 +554,7 @@ bot.onText(/\/pending/, async (msg) => {
   } catch(e) { bot.sendMessage(chatId, '❌ Error: ' + e.message) }
 })
 
+// ── Callback queries ──────────────────────────────────────────
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   await bot.answerCallbackQuery(query.id);
@@ -646,7 +589,6 @@ bot.on('contact', async (msg) => {
       reply_markup: { remove_keyboard: true }
     });
 
-    // ── Welcome bonus for new users ───────────────────────────
     const WELCOME_BONUS_ENABLED = process.env.WELCOME_BONUS !== 'false'
     if (isNew && WELCOME_BONUS_ENABLED) {
       try {
@@ -669,15 +611,9 @@ bot.on('contact', async (msg) => {
         user.balance = bonusData.new_balance || 10
 
         const welcomeCaption =
-          `🎉 *Welcome to ET Games!*
-
-` +
-          `You have received a *FREE 10 ETB* welcome bonus! 🎁
-
-` +
-          `Your balance is now *${user.balance} ETB* — start playing now and win big! 💰
-
-` +
+          `🎉 *Welcome to ET Games!*\n\n` +
+          `You have received a *FREE 10 ETB* welcome bonus! 🎁\n\n` +
+          `Your balance is now *${user.balance} ETB* — start playing now and win big! 💰\n\n` +
           `🎲 Ludo · 🃏 Crazy Card · 🎱 Bingo`
 
         const welcomeKeyboard = { inline_keyboard: [[
@@ -703,41 +639,10 @@ bot.on('contact', async (msg) => {
   }
 });
 
-// ── Admin: send photo to update banners ──────────────────────
-// Send with caption "welcome" → updates welcome bonus photo
-// Send without caption → updates main menu banner
-bot.on('photo', async (msg) => {
-  const chatId  = String(msg.chat.id)
-  if (!ADMIN_IDS.includes(chatId)) return
-  const fileId  = msg.photo[msg.photo.length - 1].file_id
-  const caption = (msg.caption || '').toLowerCase()
-
-  if (caption.includes('welcome')) {
-    WELCOME_BANNER = fileId
-    await bot.sendMessage(chatId,
-      `✅ Welcome bonus photo updated!
-
-New users will see this when they register.
-
-To keep after restart add to env:
-WELCOME_BANNER=${fileId}`
-    )
-  } else {
-    process.env.BANNER_URL = fileId
-    await bot.sendMessage(chatId,
-      `✅ Main menu banner updated!
-
-To keep after restart add to env:
-BANNER_URL=${fileId}`
-    )
-    const user = await getUser(chatId)
-    if (user) await sendMainMenu(chatId, user.username, user.balance, false)
-  }
-})
-
-// ── /photocast (admin) — blast photo+caption to all users ────
-// Usage: Send a photo to the bot with caption starting with /photocast
-// Example caption: /photocast Big announcement! New game coming soon! 🎮
+// ── Admin photo handler (SINGLE handler — merged) ─────────────
+// /photocast <text>  → blast photo to all users
+// caption "welcome"  → update welcome banner
+// no/other caption   → update main menu banner
 bot.on('photo', async (msg) => {
   const chatId  = String(msg.chat.id)
   if (!ADMIN_IDS.includes(chatId)) return
@@ -745,54 +650,43 @@ bot.on('photo', async (msg) => {
   const caption = (msg.caption || '').trim()
   const lower   = caption.toLowerCase()
 
-  // /photocast command — blast to all users
+  // ── /photocast — blast to ALL users (paginated) ───────────
   if (lower.startsWith('/photocast')) {
     const text = caption.replace(/^\/photocast\s*/i, '').trim()
-    if (!text) return bot.sendMessage(chatId, '❌ Add a message after /photocast\n\nExample caption:\n/photocast Hello everyone! New update is live! 🎮')
+    if (!text) return bot.sendMessage(chatId,
+      '❌ Add a message after /photocast\n\nExample:\n/photocast Hello everyone! New update is live! 🎮'
+    )
 
-    const { data: users } = await supabase.from('users').select('chat_id')
-    if (!users?.length) return bot.sendMessage(chatId, '❌ No users found.')
+    const users = await getAllUsers()
+    if (!users.length) return bot.sendMessage(chatId, '❌ No users found.')
 
     await bot.sendMessage(chatId, `📢 Sending photo to ${users.length} users...`)
 
     let sent = 0, failed = 0
     for (const user of users) {
       try {
-        await bot.sendPhoto(user.chat_id, fileId, {
-          caption: text,
-          parse_mode: 'HTML'
-        })
+        await bot.sendPhoto(user.chat_id, fileId, { caption: text, parse_mode: 'HTML' })
         sent++
       } catch { failed++ }
       await new Promise(r => setTimeout(r, 60))
     }
-    await bot.sendMessage(chatId, `✅ Done!
-✓ Sent: ${sent}
-✗ Failed: ${failed}`)
+    await bot.sendMessage(chatId, `✅ Done!\n✓ Sent: ${sent}\n✗ Failed: ${failed}`)
     return
   }
 
-  // welcome → update welcome banner
+  // ── caption "welcome" → update welcome banner ─────────────
   if (lower.includes('welcome')) {
     WELCOME_BANNER = fileId
     await bot.sendMessage(chatId,
-      `✅ Welcome bonus photo updated!
-
-New users will see this when they register.
-
-To keep after restart:
-WELCOME_BANNER=${fileId}`
+      `✅ Welcome bonus photo updated!\n\nTo keep after restart:\nWELCOME_BANNER=${fileId}`
     )
     return
   }
 
-  // no caption or other caption → update main menu banner
+  // ── no/other caption → update main menu banner ────────────
   process.env.BANNER_URL = fileId
   await bot.sendMessage(chatId,
-    `✅ Main menu banner updated!
-
-To keep after restart:
-BANNER_URL=${fileId}`
+    `✅ Main menu banner updated!\n\nTo keep after restart:\nBANNER_URL=${fileId}`
   )
   const user = await getUser(chatId)
   if (user) await sendMainMenu(chatId, user.username, user.balance, false)
