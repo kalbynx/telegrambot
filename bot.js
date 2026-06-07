@@ -399,10 +399,10 @@ bot.onText(/\/users/, async (msg) => {
 });
 
 // ── /broadcast (admin) ────────────────────────────────────────
-bot.onText(/\/broadcast (.+)/, async (msg, match) => {
+bot.onText(/\/broadcast ([\s\S]+)/, async (msg, match) => {
   const chatId = String(msg.chat.id);
   if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.');
-  const text = match[1];
+  const text = match[1].trim();
 
   const users = await getAllUsers();
   if (!users.length) return bot.sendMessage(chatId, '❌ No users found.');
