@@ -409,8 +409,27 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
   const chatId = String(msg.chat.id);
   if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.');
   const text = match[1];
-  const { data: users } = await supabase.from('users').select('chat_id');
-  if (!users?.length) return bot.sendMessage(chatId, '❌ No users found.');
+
+  
+const users = []
+let from = 0
+const PAGE = 1000
+while (true) {
+  const { data, error } = await supabase.from('users').select('chat_id').range(from, from + PAGE - 1)
+  if (error || !data?.length) break
+  users.push(...data)
+  if (data.length < PAGE) break
+  from += PAGE
+}
+if (!users.length) return bot.sendMessage(chatId, '❌ No users found.')
+
+
+
+
+
+
+
+
   let sent = 0, failed = 0;
   await bot.sendMessage(chatId, `📢 Broadcasting to ${users.length} users...`);
   for (const user of users) {
