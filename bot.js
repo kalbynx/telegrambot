@@ -255,10 +255,11 @@ const MAIN_KEYBOARD = {
   keyboard: [
     [{ text: '🎮 Play Games' }, { text: '💳 Deposit' }],
     [{ text: '🏧 Withdraw'  }, { text: '💰 Balance'  }],
-    [{ text: '🔗 Refer & Earn' }, { text: '🆘 Support' }],
+    [{ text: '🔗 Refer & Earn' }, { text: '🏢 Agent'  }],
+    [{ text: '🆘 Support' }],
   ],
   resize_keyboard: true,
-  persistent: true, // stays visible always
+  persistent: true,
 };
 
 async function sendMainMenu(chatId, username, balance, isNew) {
@@ -433,7 +434,17 @@ async function processWithdraw(chatId, username, phone, amount) {
 // ── Agent dashboard ───────────────────────────────────────────
 async function sendAgentDashboard(chatId) {
   const agent = await getAgent(chatId);
-  if (!agent) return bot.sendMessage(chatId, '❌ You are not an agent. Contact admin.');
+  if (!agent) {
+    return bot.sendMessage(chatId,
+      `🏢 <b>Agent Program</b>\n\n` +
+      `You are not currently an agent.\n\n` +
+      `To become an agent and earn commission when your referred users play Bingo, contact the admin.`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[{ text: '🆘 Contact Admin', url: SUPPORT_URL }]] }
+      }
+    );
+  }
 
   // Get referred users
   const { data: referrals } = await supabase
@@ -990,6 +1001,19 @@ bot.on('message', async (msg) => {
     if (text === '💳 Deposit')     return startDeposit(chatId, user.username);
     if (text === '🏧 Withdraw')    return startWithdraw(chatId);
     if (text === '🆘 Support')     return bot.sendMessage(chatId, `Contact support: @etgamessupport`, { reply_markup: { inline_keyboard: [[{ text: '💬 Contact Support', url: SUPPORT_URL }]] } });
+    if (text === '🏢 Agent') {
+      const agent = await getAgent(chatId);
+      if (agent) return sendAgentDashboard(chatId);
+      return bot.sendMessage(chatId,
+        `🏢 <b>Agent Program</b>\n\n` +
+        `You are not currently an agent.\n\n` +
+        `To become an agent and earn commission when your referred users play Bingo, contact the admin.`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[{ text: '🆘 Contact Admin', url: SUPPORT_URL }]] }
+        }
+      );
+    }
     if (text === '🔗 Refer & Earn') return sendReferInfo(chatId, user);
     if (text === '💰 Balance') {
       const token   = generateToken(chatId, user.username);
