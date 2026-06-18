@@ -587,12 +587,37 @@ bot.onText(/\/makeagent(?:\s+(.+))?/, async (msg, match) => {
   if (!input) return bot.sendMessage(chatId, '❌ Usage: /makeagent @username or /makeagent chat_id');
 
   try {
-    // Find user by username or chat_id
-    const searchVal = input.replace('@', '');
-    const { data: users } = await supabase.from('users').select('*')
-      .or(`username.ilike.${searchVal},chat_id.eq.${searchVal}`).limit(1);
+    const searchVal = input.replace('@', '').trim();
 
-    if (!users?.length) return bot.sendMessage(chatId, `❌ User not found: ${input}`);
+    // Try exact chat_id first (if numeric)
+    let users = null;
+    if (/^\d+$/.test(searchVal)) {
+      const { data } = await supabase.from('users').select('*')
+        .eq('chat_id', searchVal).limit(1);
+      users = data;
+    }
+
+    // Try username match
+    if (!users?.length) {
+      const { data } = await supabase.from('users').select('*')
+        .ilike('username', searchVal).limit(1);
+      users = data;
+    }
+
+    // Try partial username match
+    if (!users?.length) {
+      const { data } = await supabase.from('users').select('*')
+        .ilike('username', `%${searchVal}%`).limit(1);
+      users = data;
+    }
+
+    if (!users?.length) return bot.sendMessage(chatId,
+      `❌ User not found: <code>${input}</code>
+
+Try using their chat ID instead.
+Use /finduser ${searchVal} to search.`,
+      { parse_mode: 'HTML' }
+    );
 
     const target = users[0];
 
@@ -636,9 +661,17 @@ bot.onText(/\/removeagent(?:\s+(.+))?/, async (msg, match) => {
   const input = match?.[1]?.trim();
   if (!input) return bot.sendMessage(chatId, '❌ Usage: /removeagent @username or chat_id');
 
-  const searchVal = input.replace('@', '');
-  const { data: agents } = await supabase.from('agents').select('*')
-    .or(`username.ilike.${searchVal},chat_id.eq.${searchVal}`).limit(1);
+  const searchVal = input.replace('@', '').trim();
+  let agentsData = null;
+  if (/^\d+$/.test(searchVal)) {
+    const { data } = await supabase.from('agents').select('*').eq('chat_id', searchVal).limit(1);
+    agentsData = data;
+  }
+  if (!agentsData?.length) {
+    const { data } = await supabase.from('agents').select('*').ilike('username', `%${searchVal}%`).limit(1);
+    agentsData = data;
+  }
+  const agents = agentsData;
 
   if (!agents?.length) return bot.sendMessage(chatId, `❌ Agent not found: ${input}`);
 
