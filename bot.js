@@ -301,14 +301,19 @@ async function sendMainMenu(chatId, username, balance, isNew) {
 }
 
 // ── Deposit flow ──────────────────────────────────────────────
+const TELEBIRR_PHONE   = '0997515809';
+const TELEBIRR_NAME    = 'Biruuke Nigida';
+
 async function startDeposit(chatId, username) {
   pendingDeposit.set(String(chatId), true);
   await bot.sendMessage(chatId,
     `💳 <b>Deposit via Telebirr</b>\n\n` +
-    `1. Send money to: <b>+251961401822</b>\n` +
-    `2. Copy your transaction reference number\n` +
-    `3. Send it here\n\n` +
-    `<i>Send your Telebirr reference number now:</i>`,
+    `<b>Step 1:</b> Open Telebirr and send money to:\n` +
+    `📱 <code>${TELEBIRR_PHONE}</code>  👤 <b>${TELEBIRR_NAME}</b>\n\n` +
+    `<b>Step 2:</b> After sending, copy your payment proof\n` +
+    `(Full SMS, receipt link, or just the transaction ID)\n\n` +
+    `<b>Step 3:</b> Paste it below 👇\n\n` +
+    `<i>Send your Telebirr message, link, or transaction ID now:</i>`,
     {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cancel_deposit' }]] }
@@ -316,21 +321,24 @@ async function startDeposit(chatId, username) {
   );
 }
 
-async function processDeposit(chatId, username, reference) {
+async function processDeposit(chatId, username, input) {
   pendingDeposit.delete(String(chatId));
   const token = generateToken(chatId, username);
 
-  const processingMsg = await bot.sendMessage(chatId, '⏳ Verifying your payment...');
+  const processingMsg = await bot.sendMessage(chatId,
+    `🔄 <b>Verifying your payment...</b>\n\nPlease wait, this may take a moment.`,
+    { parse_mode: 'HTML' }
+  );
 
   try {
     const res = await fetch(`${DEPOSIT_URL}/api/verify-and-deposit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        input: reference,
+        input,                      // full SMS, link, or tx ID — same as web
         user_id: String(chatId),
         username,
-        user_jwt: token
+        user_jwt: token             // same JWT the web uses
       })
     });
     const data = await res.json();
@@ -338,22 +346,36 @@ async function processDeposit(chatId, username, reference) {
     await bot.deleteMessage(chatId, processingMsg.message_id).catch(() => {});
 
     if (data.success) {
+      const bonusLine = data.message?.includes('bonus')
+        ? `\n🎁 <b>${data.message}</b>` : '';
       await bot.sendMessage(chatId,
         `✅ <b>Deposit Successful!</b>\n\n` +
-        `💰 Amount: <b>${data.transaction?.amount || '?'} ETB</b>\n` +
-        `📊 New Balance: <b>${data.new_balance} ETB</b>\n` +
-        `🔖 Reference: <code>${reference}</code>`,
+        `💰 Amount: <b>${data.transaction?.amount?.toLocaleString() || '?'} ETB</b>${bonusLine}\n` +
+        `📊 New Balance: <b>${parseFloat(data.new_balance || 0).toLocaleString()} ETB</b>\n` +
+        `🔖 Reference: <code>${data.reference}</code>\n` +
+        `👤 Payer: ${data.transaction?.payer || 'N/A'}\n\n` +
+        `Your balance is ready\. Good luck\! 🎮`,
         { parse_mode: 'HTML' }
       );
     } else {
       await bot.sendMessage(chatId,
-        `❌ <b>Deposit Failed</b>\n\n${data.error || 'Unknown error'}\n\nTry again with /deposit`,
-        { parse_mode: 'HTML' }
+        `❌ <b>Deposit Failed</b>\n\n${data.error || 'Unknown error'}\n\n` +
+        `Try again with /deposit or contact @etgamessupport`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[
+            { text: '🔄 Try Again', callback_data: 'deposit' },
+            { text: '🆘 Support', url: SUPPORT_URL }
+          ]]}
+        }
       );
     }
   } catch (err) {
     await bot.deleteMessage(chatId, processingMsg.message_id).catch(() => {});
-    await bot.sendMessage(chatId, `❌ Error processing deposit: ${err.message}`);
+    await bot.sendMessage(chatId,
+      `❌ <b>Verification Error</b>\n\nYour case has been reported to admin for manual review.\n\nContact @etgamessupport if not resolved within 24h.`,
+      { parse_mode: 'HTML' }
+    );
   }
 }
 
