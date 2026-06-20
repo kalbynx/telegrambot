@@ -175,8 +175,9 @@ async function payAgentDepositCommission(userId, depositAmount, reference) {
 }
 
 // Pay agent commission when a bingo game ends
-// Called from bingo server via webhook — or you can call it from bot directly
+// DISABLED — bingo bet commission turned off, agents now only earn from deposits
 async function payAgentCommission(userId, gameId, houseCut) {
+  return; // no-op — bingo commission disabled
   try {
     // Find if this user was referred by an agent
     const { data: referral } = await supabase
@@ -518,13 +519,8 @@ async function sendAgentDashboard(chatId) {
     .order('created_at', { ascending: false })
     .limit(5);
 
-  const totalCommission = agent.total_commission || 0;
   const totalDepositCommission = agent.total_deposit_commission || 0;
   const depositRate = agent.deposit_commission_rate != null ? agent.deposit_commission_rate : 0.05;
-
-  const recentLines = (commissions || []).map(c =>
-    `  +${c.commission} ETB  •  ${timeAgo(c.created_at)}`
-  ).join('\n') || '  No commissions yet';
 
   // Recent deposit commissions
   const { data: depositCommissions } = await supabase
@@ -545,19 +541,15 @@ async function sendAgentDashboard(chatId) {
   await bot.sendMessage(chatId,
     `🏢 <b>Agent Dashboard</b>\n\n` +
     `👤 Agent: <b>${agent.username}</b>\n` +
-    `📊 Bingo Commission: <b>${(agent.commission_rate * 100).toFixed(0)}%</b> of house cut\n` +
-    `💳 Deposit Commission: <b>${(depositRate * 100).toFixed(0)}%</b> of every deposit\n\n` +
+    `💳 Deposit Commission: <b>${(depositRate * 100).toFixed(0)}%</b> of a referred user's first deposit\n\n` +
     `👥 <b>Your Users</b>\n` +
     `Total referred: <b>${totalReferred}</b>\n` +
     `Active (deposited): <b>${activeUsers}</b>\n\n` +
     `💰 <b>Earnings</b>\n` +
-    `Bingo commission: <b>${totalCommission} ETB</b>\n` +
-    `Deposit commission: <b>${totalDepositCommission} ETB</b>\n` +
-    `Total: <b>${(totalCommission + totalDepositCommission).toFixed(2)} ETB</b>\n\n` +
-    `📋 <b>Recent Bingo Commissions:</b>\n${recentLines}\n\n` +
-    `📋 <b>Recent Deposit Commissions:</b>\n${recentDepositLines}\n\n` +
+    `Total commission: <b>${totalDepositCommission} ETB</b>\n\n` +
+    `📋 <b>Recent Commissions:</b>\n${recentDepositLines}\n\n` +
     `🔗 <b>Your Agent Link:</b>\n<code>${agentLink}</code>\n\n` +
-    `Share this link — when users register through it, you earn commission on every deposit AND every Bingo game they play!`,
+    `Share this link — when users register through it and make their first deposit, you earn commission!`,
     {
       parse_mode: 'HTML',
       reply_markup: {
@@ -827,7 +819,7 @@ bot.onText(/\/agents/, async (msg) => {
   if (!agents?.length) return bot.sendMessage(chatId, '📋 No active agents yet.');
 
   const lines = agents.map((a, i) =>
-    `${i+1}. <b>${a.username}</b> — ${a.total_commission || 0} ETB earned`
+    `${i+1}. <b>${a.username}</b> — ${a.total_deposit_commission || 0} ETB earned (${((a.deposit_commission_rate ?? 0.05) * 100).toFixed(0)}% deposit rate)`
   ).join('\n');
 
   bot.sendMessage(chatId, `🏢 <b>Active Agents (${agents.length})</b>\n\n${lines}`, { parse_mode: 'HTML' });
@@ -969,7 +961,7 @@ bot.onText(/\/stats/, async (msg) => {
       safe(() => supabase.from('transactions').select('transaction_type,amount,game').eq('status', 'success')),
       safe(() => supabase.from('withdrawals').select('amount,status')),
       safe(() => supabase.from('referrals').select('status')),
-      safe(() => supabase.from('agents').select('total_commission').eq('is_active', true)),
+      safe(() => supabase.from('agents').select('total_deposit_commission').eq('is_active', true)),
     ]);
     const allTxs   = txs || [];
     const deposits = allTxs.filter(t => t.transaction_type==='deposit').reduce((s,t)=>s+parseFloat(t.amount||0),0);
@@ -979,7 +971,7 @@ bot.onText(/\/stats/, async (msg) => {
     const withdrawn   = (withdrawals||[]).filter(w=>w.status==='completed').reduce((s,w)=>s+parseFloat(w.amount||0),0);
     const pendingW    = (withdrawals||[]).filter(w=>w.status==='pending').reduce((s,w)=>s+parseFloat(w.amount||0),0);
     const rewarded    = (referrals||[]).filter(r=>r.status==='rewarded').length;
-    const agentsPaid  = (agentsData||[]).reduce((s,a)=>s+parseFloat(a.total_commission||0),0);
+    const agentsPaid  = (agentsData||[]).reduce((s,a)=>s+parseFloat(a.total_deposit_commission||0),0);
     const bingoP = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='bingo').reduce((s,t)=>s+parseFloat(t.amount||0),0)
                  - allTxs.filter(t=>t.transaction_type==='credit'&&t.game?.toLowerCase()==='bingo').reduce((s,t)=>s+parseFloat(t.amount||0),0);
     const ludoP  = allTxs.filter(t=>t.transaction_type==='debit'&&t.game?.toLowerCase()==='ludo').reduce((s,t)=>s+parseFloat(t.amount||0),0)
@@ -997,7 +989,7 @@ bot.onText(/\/stats/, async (msg) => {
       `🏧 Withdrawn: <b>${withdrawn.toFixed(2)} ETB</b>\n` +
       `⏳ Pending: <b>${pendingW.toFixed(2)} ETB</b>\n` +
       `🔗 Referrals Paid: <b>${rewarded}</b>\n` +
-      `🏢 Agent Commissions: <b>${agentsPaid.toFixed(2)} ETB</b>\n\n` +
+      `🏢 Agent Deposit Commissions: <b>${agentsPaid.toFixed(2)} ETB</b>\n\n` +
       `🎮 <b>Per Game:</b>\n🎲 Ludo: ${ludoP.toFixed(2)} ETB\n🃏 Crazy: ${crazyP.toFixed(2)} ETB\n🎱 Bingo: ${bingoP.toFixed(2)} ETB`,
       { parse_mode: 'HTML' }
     );
