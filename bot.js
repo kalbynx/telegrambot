@@ -119,6 +119,61 @@ async function isAgent(chatId) {
   return !!agent;
 }
 
+// Pay agent a percentage of a user's deposit
+// Called from the deposit server after a successful deposit
+async function payAgentDepositCommission(userId, depositAmount, reference) {
+  try {
+    const { data: referral } = await supabase
+      .from('referrals')
+      .select('agent_id')
+      .eq('referred_id', String(userId))
+      .not('agent_id', 'is', null)
+      .single();
+
+    if (!referral?.agent_id) return;
+
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('*')
+      .eq('chat_id', referral.agent_id)
+      .eq('is_active', true)
+      .single();
+
+    if (!agent) return;
+
+    const rate = agent.deposit_commission_rate != null ? agent.deposit_commission_rate : 0.05;
+    const commission = Math.floor(depositAmount * rate);
+    if (commission <= 0) return;
+
+    await creditUser(agent.chat_id, agent.username, commission, 'agent_deposit_commission', `AGENT_DEP_${reference}`);
+
+    await supabase.from('agent_deposit_commissions').insert({
+      agent_id: agent.chat_id,
+      user_id: String(userId),
+      deposit_amount: depositAmount,
+      commission,
+      reference,
+      created_at: new Date().toISOString()
+    });
+
+    await supabase.from('agents')
+      .update({ total_deposit_commission: (agent.total_deposit_commission || 0) + commission })
+      .eq('chat_id', agent.chat_id);
+
+    console.log(`[AGENT] ${agent.chat_id} earned ${commission} ETB deposit commission (${(rate*100).toFixed(0)}% of ${depositAmount} ETB)`);
+
+    await bot.sendMessage(agent.chat_id,
+      `💳 <b>Deposit Commission Earned!</b>\n\n` +
+      `+${commission} ETB (${(rate*100).toFixed(0)}%) from a deposit by your referred user.\n` +
+      `Deposit amount: ${depositAmount} ETB`,
+      { parse_mode: 'HTML' }
+    ).catch(() => {});
+
+  } catch (err) {
+    console.error('[AGENT] Deposit commission error:', err.message);
+  }
+}
+
 // Pay agent commission when a bingo game ends
 // Called from bingo server via webhook — or you can call it from bot directly
 async function payAgentCommission(userId, gameId, houseCut) {
@@ -464,9 +519,24 @@ async function sendAgentDashboard(chatId) {
     .limit(5);
 
   const totalCommission = agent.total_commission || 0;
+  const totalDepositCommission = agent.total_deposit_commission || 0;
+  const depositRate = agent.deposit_commission_rate != null ? agent.deposit_commission_rate : 0.05;
+
   const recentLines = (commissions || []).map(c =>
     `  +${c.commission} ETB  •  ${timeAgo(c.created_at)}`
   ).join('\n') || '  No commissions yet';
+
+  // Recent deposit commissions
+  const { data: depositCommissions } = await supabase
+    .from('agent_deposit_commissions')
+    .select('commission, created_at')
+    .eq('agent_id', String(chatId))
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  const recentDepositLines = (depositCommissions || []).map(c =>
+    `  +${c.commission} ETB  •  ${timeAgo(c.created_at)}`
+  ).join('\n') || '  No deposit commissions yet';
 
   // Generate agent referral link
   const botInfo = await bot.getMe();
@@ -475,15 +545,19 @@ async function sendAgentDashboard(chatId) {
   await bot.sendMessage(chatId,
     `🏢 <b>Agent Dashboard</b>\n\n` +
     `👤 Agent: <b>${agent.username}</b>\n` +
-    `📊 Commission Rate: <b>${(agent.commission_rate * 100).toFixed(0)}%</b> of house cut\n\n` +
+    `📊 Bingo Commission: <b>${(agent.commission_rate * 100).toFixed(0)}%</b> of house cut\n` +
+    `💳 Deposit Commission: <b>${(depositRate * 100).toFixed(0)}%</b> of every deposit\n\n` +
     `👥 <b>Your Users</b>\n` +
     `Total referred: <b>${totalReferred}</b>\n` +
     `Active (deposited): <b>${activeUsers}</b>\n\n` +
     `💰 <b>Earnings</b>\n` +
-    `Total commission: <b>${totalCommission} ETB</b>\n\n` +
-    `📋 <b>Recent Commissions:</b>\n${recentLines}\n\n` +
+    `Bingo commission: <b>${totalCommission} ETB</b>\n` +
+    `Deposit commission: <b>${totalDepositCommission} ETB</b>\n` +
+    `Total: <b>${(totalCommission + totalDepositCommission).toFixed(2)} ETB</b>\n\n` +
+    `📋 <b>Recent Bingo Commissions:</b>\n${recentLines}\n\n` +
+    `📋 <b>Recent Deposit Commissions:</b>\n${recentDepositLines}\n\n` +
     `🔗 <b>Your Agent Link:</b>\n<code>${agentLink}</code>\n\n` +
-    `Share this link — when users register through it and play Bingo, you earn commission!`,
+    `Share this link — when users register through it, you earn commission on every deposit AND every Bingo game they play!`,
     {
       parse_mode: 'HTML',
       reply_markup: {
@@ -657,6 +731,59 @@ Use /finduser ${searchVal} to search.`,
       `🎉 <b>You're now an ET Games Agent!</b>\n\n` +
       `You earn <b>${(AGENT_COMMISSION_RATE * 100).toFixed(0)}%</b> of the house cut every time your referred users play Bingo.\n\n` +
       `Use /agent to see your dashboard and referral link.`,
+      { parse_mode: 'HTML' }
+    ).catch(() => {});
+
+  } catch (e) {
+    bot.sendMessage(chatId, `❌ Error: ${e.message}`);
+  }
+});
+
+// ── /setdepositrate (admin) — set per-agent deposit commission % ──────
+bot.onText(/\/setdepositrate(?:\s+(.+))?/, async (msg, match) => {
+  const chatId = String(msg.chat.id);
+  if (!ADMIN_IDS.includes(chatId)) return bot.sendMessage(chatId, '❌ Admin only.');
+
+  const input = match?.[1]?.trim();
+  if (!input) return bot.sendMessage(chatId,
+    '❌ Usage: /setdepositrate @username 5\n\nSets the agent\'s deposit commission to 5%.'
+  );
+
+  const parts = input.split(/\s+/);
+  if (parts.length < 2) return bot.sendMessage(chatId, '❌ Usage: /setdepositrate @username 5');
+
+  const searchVal = parts[0].replace('@', '').trim();
+  const percent   = parseFloat(parts[1]);
+
+  if (isNaN(percent) || percent < 0 || percent > 100) {
+    return bot.sendMessage(chatId, '❌ Percent must be a number between 0 and 100.');
+  }
+
+  try {
+    let agentsData = null;
+    if (/^\d+$/.test(searchVal)) {
+      const { data } = await supabase.from('agents').select('*').eq('chat_id', searchVal).limit(1);
+      agentsData = data;
+    }
+    if (!agentsData?.length) {
+      const { data } = await supabase.from('agents').select('*').ilike('username', `%${searchVal}%`).limit(1);
+      agentsData = data;
+    }
+
+    if (!agentsData?.length) return bot.sendMessage(chatId, `❌ Agent not found: ${input}`);
+
+    const agent = agentsData[0];
+    const rate  = percent / 100;
+
+    await supabase.from('agents').update({ deposit_commission_rate: rate }).eq('chat_id', agent.chat_id);
+
+    await bot.sendMessage(chatId,
+      `✅ <b>${agent.username}</b>'s deposit commission set to <b>${percent}%</b>.`,
+      { parse_mode: 'HTML' }
+    );
+
+    await bot.sendMessage(agent.chat_id,
+      `📊 <b>Deposit Commission Updated</b>\n\nYour deposit commission rate is now <b>${percent}%</b> of every deposit your referred users make.`,
       { parse_mode: 'HTML' }
     ).catch(() => {});
 
@@ -1154,4 +1281,4 @@ process.on('uncaughtException',  e => console.error('Uncaught:', e));
 process.on('unhandledRejection', e => console.error('Unhandled:', e));
 
 // ── Export payAgentCommission for bingo server ────────────────
-module.exports = { payAgentCommission };
+module.exports = { payAgentCommission, payAgentDepositCommission };
