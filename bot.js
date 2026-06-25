@@ -79,7 +79,7 @@ async function fetchTransactions(chatId) {
   } catch { return []; }
 }
 
-async function creditUser(chatId, username, amount, game, roundId) {
+async function creditUser(chatId, username, amount, game, roundId, target = 'deposit') {
   const adminToken = generateAdminToken();
   const txId = `${roundId}_${Date.now()}`;
   const res = await fetch(`${WALLET_URL}/api/credit`, {
@@ -88,10 +88,29 @@ async function creditUser(chatId, username, amount, game, roundId) {
     body: JSON.stringify({
       user_id: String(chatId), username,
       transaction_type: 'credit', amount,
-      game, round_id: roundId, transaction_id: txId
+      game, round_id: roundId, transaction_id: txId,
+      target, // 'deposit' (withdrawable, usable anywhere) or 'bonus' (Bingo-only)
     })
   });
   return res.json();
+}
+
+// Reads the admin-configurable toggle deciding whether agent commission
+// and referral bonuses land in bonus_balance (Bingo-only, default) or
+// deposit_balance (withdrawable cash, old behavior). Cached briefly.
+let _walletSettingsCache = null;
+let _walletSettingsCacheAt = 0;
+async function shouldAgentReferralGoToBonus() {
+  const now = Date.now();
+  if (_walletSettingsCache && (now - _walletSettingsCacheAt) < 15000) return _walletSettingsCache;
+  try {
+    const { data } = await supabase.from('wallet_settings').select('agent_referral_to_bonus').eq('id', 1).single();
+    _walletSettingsCache = data?.agent_referral_to_bonus !== false; // default true if missing/unset
+  } catch {
+    _walletSettingsCache = true; // safe default
+  }
+  _walletSettingsCacheAt = now;
+  return _walletSettingsCache;
 }
 
 async function getAllUsers() {
@@ -145,7 +164,8 @@ async function payAgentDepositCommission(userId, depositAmount, reference) {
     const commission = Math.floor(depositAmount * rate);
     if (commission <= 0) return;
 
-    await creditUser(agent.chat_id, agent.username, commission, 'agent_deposit_commission', `AGENT_DEP_${reference}`);
+    const target = (await shouldAgentReferralGoToBonus()) ? 'bonus' : 'deposit';
+    await creditUser(agent.chat_id, agent.username, commission, 'agent_deposit_commission', `AGENT_DEP_${reference}`, target);
 
     await supabase.from('agent_deposit_commissions').insert({
       agent_id: agent.chat_id,
@@ -258,7 +278,8 @@ async function rewardReferrer(referredId) {
   const referrer = await getUser(referral.referrer_id);
   if (!referrer) return;
 
-  await creditUser(referrer.chat_id, referrer.username, REFERRAL_BONUS, 'referral', `REFERRAL_${referral.id}`);
+  const target = (await shouldAgentReferralGoToBonus()) ? 'bonus' : 'deposit';
+  await creditUser(referrer.chat_id, referrer.username, REFERRAL_BONUS, 'referral', `REFERRAL_${referral.id}`, target);
 
   await supabase.from('referrals').update({
     status: 'rewarded', rewarded_at: new Date().toISOString()
@@ -1202,7 +1223,8 @@ bot.on('contact', async (msg) => {
             user_id: String(chatId), username,
             transaction_type: 'credit', amount: 10,
             game: 'bonus', round_id: `WELCOME_${chatId}`,
-            transaction_id: `WELCOME_${chatId}_${Date.now()}`
+            transaction_id: `WELCOME_${chatId}_${Date.now()}`,
+            target: 'bonus',
           })
         });
         const bonusData = await bonusRes.json();
