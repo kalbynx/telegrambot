@@ -19,7 +19,7 @@ const REFERRAL_BONUS = 10;
 const AGENT_COMMISSION_RATE = 0.20; // 20% of house cut
 
 // URL of the admin-dashboard service, which now also hosts the agent portal
-const AGENT_DASHBOARD_URL = process.env.AGENT_DASHBOARD_URL || 'https://admin-dashboard.onrender.com';
+const AGENT_DASHBOARD_URL = process.env.AGENT_DASHBOARD_URL || 'https://adminpage-gsgg.onrender.com';
 // Secret used to sign agent login tokens — must match AGENT_TOKEN_SECRET on
 // the admin-dashboard service. Falls back to JWT_SECRET if not set.
 const AGENT_TOKEN_SECRET  = process.env.AGENT_TOKEN_SECRET || JWT_SECRET;
@@ -376,7 +376,7 @@ async function sendMainMenu(chatId, username, balance, isNew) {
         { text: '🔗 Refer & Earn',  callback_data: 'refer' },
         { text: '🆘 Support',       url: SUPPORT_URL },
       ],
-      ...(agentUser ? [[{ text: '🏢 Agent Dashboard', url: buildAgentDashboardUrl(chatId) }]] : []),
+      ...(agentUser ? [[{ text: '🏢 Agent Dashboard', web_app: { url: buildAgentDashboardUrl(chatId) } }]] : []),
     ]
   };
 
@@ -552,7 +552,7 @@ async function sendAgentDashboard(chatId) {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '📊 Open Agent Dashboard', url: dashboardUrl }],
+          [{ text: '📊 Open Agent Dashboard', web_app: { url: dashboardUrl } }],
           [{ text: '📤 Share Agent Link', url: `https://t.me/share/url?url=${encodeURIComponent(agentLink)}&text=${encodeURIComponent('Join ET Games! 🎮 Play Bingo, Ludo & win ETB!')}` }]
         ]
       }
