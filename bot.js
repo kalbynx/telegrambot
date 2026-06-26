@@ -18,6 +18,12 @@ const SUPPORT_URL  = 'https://t.me/etgamessupport';
 const REFERRAL_BONUS = 10;
 const AGENT_COMMISSION_RATE = 0.20; // 20% of house cut
 
+// URL of the admin-dashboard service, which now also hosts the agent portal
+const AGENT_DASHBOARD_URL = process.env.AGENT_DASHBOARD_URL || 'https://admin-dashboard.onrender.com';
+// Secret used to sign agent login tokens — must match AGENT_TOKEN_SECRET on
+// the admin-dashboard service. Falls back to JWT_SECRET if not set.
+const AGENT_TOKEN_SECRET  = process.env.AGENT_TOKEN_SECRET || JWT_SECRET;
+
 if (!BOT_TOKEN)  throw new Error('Missing TELEGRAM_BOT_TOKEN');
 if (!JWT_SECRET) throw new Error('Missing JWT_SECRET');
 
@@ -41,6 +47,19 @@ function generateToken(chatId, username) {
 
 function generateAdminToken() {
   return jwt.sign({ chatId: 'system', username: 'bot', isAdmin: true }, JWT_SECRET, { expiresIn: '1h' });
+}
+
+// Short-lived token (1 hour) that proves "I am this agent" to the agent
+// portal on the admin-dashboard service. Re-issued fresh every time the
+// agent taps the dashboard button/command, so there's no long-lived secret
+// floating around in chat history.
+function generateAgentToken(chatId) {
+  return jwt.sign({ chatId: String(chatId), role: 'agent' }, AGENT_TOKEN_SECRET, { expiresIn: '1h' });
+}
+
+function buildAgentDashboardUrl(chatId) {
+  const token = generateAgentToken(chatId);
+  return `${AGENT_DASHBOARD_URL}/agent.html?token=${token}`;
 }
 
 function buildUrl(base, chatId, username) {
@@ -199,7 +218,6 @@ async function payAgentDepositCommission(userId, depositAmount, reference) {
 async function payAgentCommission(userId, gameId, houseCut) {
   return; // no-op — bingo commission disabled
   try {
-    // Find if this user was referred by an agent
     const { data: referral } = await supabase
       .from('referrals')
       .select('agent_id')
@@ -221,10 +239,8 @@ async function payAgentCommission(userId, gameId, houseCut) {
     const commission = Math.floor(houseCut * agent.commission_rate);
     if (commission <= 0) return;
 
-    // Credit agent
     await creditUser(agent.chat_id, agent.username, commission, 'agent_commission', `AGENT_${gameId}`);
 
-    // Log it
     await supabase.from('agent_commissions').insert({
       agent_id: agent.chat_id,
       user_id: String(userId),
@@ -235,14 +251,12 @@ async function payAgentCommission(userId, gameId, houseCut) {
       created_at: new Date().toISOString()
     });
 
-    // Update agent total
     await supabase.from('agents')
       .update({ total_commission: (agent.total_commission || 0) + commission })
       .eq('chat_id', agent.chat_id);
 
     console.log(`[AGENT] ${agent.chat_id} earned ${commission} ETB commission from game ${gameId}`);
 
-    // Notify agent silently (no ping if night time — just log for now)
     await bot.sendMessage(agent.chat_id,
       `💰 <b>Commission Earned!</b>\n\n` +
       `+${commission} ETB from a Bingo game played by your user.\n` +
@@ -362,7 +376,7 @@ async function sendMainMenu(chatId, username, balance, isNew) {
         { text: '🔗 Refer & Earn',  callback_data: 'refer' },
         { text: '🆘 Support',       url: SUPPORT_URL },
       ],
-      ...(agentUser ? [[{ text: '🏢 Agent Dashboard', callback_data: 'agent_dashboard' }]] : []),
+      ...(agentUser ? [[{ text: '🏢 Agent Dashboard', url: buildAgentDashboardUrl(chatId) }]] : []),
     ]
   };
 
@@ -515,7 +529,7 @@ async function sendAgentDashboard(chatId) {
     return bot.sendMessage(chatId,
       `🏢 <b>Agent Program</b>\n\n` +
       `You are not currently an agent.\n\n` +
-      `To become an agent and earn commission when your referred users play Bingo, contact the admin.`,
+      `To become an agent and earn commission when your referred users deposit, contact the admin.`,
       {
         parse_mode: 'HTML',
         reply_markup: { inline_keyboard: [[{ text: '🆘 Contact Admin', url: SUPPORT_URL }]] }
@@ -523,37 +537,7 @@ async function sendAgentDashboard(chatId) {
     );
   }
 
-  // Get referred users
-  const { data: referrals } = await supabase
-    .from('referrals')
-    .select('referred_id, status, created_at')
-    .eq('agent_id', String(chatId));
-
-  const totalReferred = referrals?.length || 0;
-  const activeUsers   = referrals?.filter(r => r.status === 'rewarded').length || 0;
-
-  // Get commission history
-  const { data: commissions } = await supabase
-    .from('agent_commissions')
-    .select('commission, created_at, user_id')
-    .eq('agent_id', String(chatId))
-    .order('created_at', { ascending: false })
-    .limit(5);
-
-  const totalDepositCommission = agent.total_deposit_commission || 0;
-  const depositRate = agent.deposit_commission_rate != null ? agent.deposit_commission_rate : 0.05;
-
-  // Recent deposit commissions
-  const { data: depositCommissions } = await supabase
-    .from('agent_deposit_commissions')
-    .select('commission, created_at')
-    .eq('agent_id', String(chatId))
-    .order('created_at', { ascending: false })
-    .limit(5);
-
-  const recentDepositLines = (depositCommissions || []).map(c =>
-    `  +${c.commission} ETB  •  ${timeAgo(c.created_at)}`
-  ).join('\n') || '  No deposit commissions yet';
+  const dashboardUrl = buildAgentDashboardUrl(chatId);
 
   // Generate agent referral link
   const botInfo = await bot.getMe();
@@ -561,22 +545,16 @@ async function sendAgentDashboard(chatId) {
 
   await bot.sendMessage(chatId,
     `🏢 <b>Agent Dashboard</b>\n\n` +
-    `👤 Agent: <b>${agent.username}</b>\n` +
-    `💳 Deposit Commission: <b>${(depositRate * 100).toFixed(0)}%</b> of a referred user's first deposit\n\n` +
-    `👥 <b>Your Users</b>\n` +
-    `Total referred: <b>${totalReferred}</b>\n` +
-    `Active (deposited): <b>${activeUsers}</b>\n\n` +
-    `💰 <b>Earnings</b>\n` +
-    `Total commission: <b>${totalDepositCommission} ETB</b>\n\n` +
-    `📋 <b>Recent Commissions:</b>\n${recentDepositLines}\n\n` +
+    `Tap below to open your full dashboard — see your balance, earnings, referral stats, and request withdrawals.\n\n` +
     `🔗 <b>Your Agent Link:</b>\n<code>${agentLink}</code>\n\n` +
     `Share this link — when users register through it and make their first deposit, you earn commission!`,
     {
       parse_mode: 'HTML',
       reply_markup: {
-        inline_keyboard: [[
-          { text: '📤 Share Agent Link', url: `https://t.me/share/url?url=${encodeURIComponent(agentLink)}&text=${encodeURIComponent('Join ET Games! 🎮 Play Bingo, Ludo & win ETB!')}` }
-        ]]
+        inline_keyboard: [
+          [{ text: '📊 Open Agent Dashboard', url: dashboardUrl }],
+          [{ text: '📤 Share Agent Link', url: `https://t.me/share/url?url=${encodeURIComponent(agentLink)}&text=${encodeURIComponent('Join ET Games! 🎮 Play Bingo, Ludo & win ETB!')}` }]
+        ]
       }
     }
   );
@@ -1110,9 +1088,6 @@ Share your phone to register — your friend gets ${REFERRAL_BONUS} ETB when you
     pendingWithdraw.delete(String(chatId));
     return bot.sendMessage(chatId, '❌ Withdrawal cancelled.');
   }
-  if (query.data === 'agent_dashboard') {
-    return sendAgentDashboard(chatId);
-  }
   if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
   if (query.data === 'balance') {
     const token   = generateToken(chatId, user.username);
@@ -1141,19 +1116,7 @@ bot.on('message', async (msg) => {
     if (text === '💳 Deposit')     return startDeposit(chatId, user.username);
     if (text === '🏧 Withdraw')    return startWithdraw(chatId);
     if (text === '🆘 Support')     return bot.sendMessage(chatId, `Contact support: @etgamessupport`, { reply_markup: { inline_keyboard: [[{ text: '💬 Contact Support', url: SUPPORT_URL }]] } });
-    if (text === '🏢 Agent') {
-      const agent = await getAgent(chatId);
-      if (agent) return sendAgentDashboard(chatId);
-      return bot.sendMessage(chatId,
-        `🏢 <b>Agent Program</b>\n\n` +
-        `You are not currently an agent.\n\n` +
-        `To become an agent and earn commission when your referred users play Bingo, contact the admin.`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: [[{ text: '🆘 Contact Admin', url: SUPPORT_URL }]] }
-        }
-      );
-    }
+    if (text === '🏢 Agent')       return sendAgentDashboard(chatId);
     if (text === '🔗 Refer & Earn') return sendReferInfo(chatId, user);
     if (text === '💰 Balance') {
       const token   = generateToken(chatId, user.username);
