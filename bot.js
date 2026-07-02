@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 // ── Config ────────────────────────────────────────────────────
 const BOT_TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
 const HOME_URL     = process.env.HOME_URL    || 'https://homepage-one-beta-16.vercel.app';
-const DEPOSIT_URL  = process.env.DEPOSIT_URL || 'https://telebirr-csaz.onrender.com';
+const DEPOSIT_URL  = process.env.DEPOSIT_URL || 'https://telebirr-production.up.railway.app';
 const LUDO_URL     = process.env.LUDO_URL    || 'https://ludo-1-fdxp.onrender.com';
 const BINGO_URL    = process.env.BINGO_URL   || 'https://bingo-game-49f1.onrender.com';
 const GAME_URL     = process.env.GAME_URL    || 'https://crazy-c1ol.onrender.com/lobby.html';
@@ -34,6 +34,245 @@ const supabase = createClient(
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 console.log('🤖 ET Games bot running...');
+
+// ── Language Support ──────────────────────────────────────────
+// Available languages
+const LANGUAGES = {
+  am: 'አማርኛ',
+  en: 'English'
+};
+
+// Translation strings
+const TRANSLATIONS = {
+  am: {
+    // Menu buttons
+    play_games: '🎮 ጨዋታዎች',
+    deposit: '💳 ገንዘብ አስገባ',
+    withdraw: '🏧 ገንዘብ አውጣ',
+    balance: '💰 ሒሳብ',
+    refer: '🔗 ሌሎችን ጋብዝ',
+    agent: '🏢 ወኪል',
+    support: '🆘 ድጋፍ',
+    language: '🌍 ቋንቋ',
+
+    // Welcome messages
+    welcome: '🎮 እንኳን ወደ ET Games በደህና መጡ!',
+    welcome_sub: 'የኢትዮጵያ ቁጥር 1 የቴሌግራም ጨዋታ መድረክ 🎲 ሉዶ • 🃏 ክሬዚ ካርድ • 🎱 ቢንጎ በየቀኑ እውነተኛ ETB ያሸንፉ!',
+    register_btn: '🚀 ይመዝገቡ እና ይጫወቱ',
+    
+    // Registration
+    welcome_new: '🎉 እንኳን ወደ ET Games በደህና መጡ!',
+    share_phone: '📱 የስልክ ቁጥርዎን ያጋሩ',
+    phone_registered: '✅ የስልክ ቁጥር ተቀብለናል!',
+    registration_complete: '✅ ምዝገባ ተጠናቋል!',
+    welcome_back: '👋 እንኳን ደህና መጡ ተመልሰው',
+    
+    // Balance
+    your_balance: '💰 ሒሳብዎ፡',
+    balance_etb: 'ETB',
+    
+    // Deposit
+    deposit_title: '💳 በቴሌብር ገንዘብ ማስገባት',
+    deposit_step1: '📋 ደረጃ 1፡ ቴሌብር ይክፈቱ እና ገንዘብ ይላኩ ለ፡',
+    deposit_step2: '📋 ደረጃ 2፡ መላክ ከጨረሱ በኋላ የክፍያ ማረጋገጫዎን ይቅዱ',
+    deposit_step3: '📋 ደረጃ 3፡ ከታች ይለጥፉ',
+    deposit_prompt: 'የቴሌብር መልዕክትዎን፣ አገናኝዎን ወይም የግብይት መለያዎን ይላኩ፡',
+    deposit_verifying: '🔄 ክፍያዎን እያረጋገጥን ነው... እባክዎ ይጠብቁ።',
+    deposit_success: '✅ ገንዘብ በተሳካ ሁኔታ ገብቷል!',
+    deposit_amount: '💰 መጠን፡',
+    deposit_balance: '📊 አዲስ ሒሳብ፡',
+    deposit_ref: '🔖 ማጣቀሻ፡',
+    deposit_payer: '👤 ላኪ፡',
+    deposit_failed: '❌ ገንዘብ ማስገባት አልተሳካም',
+    deposit_cancel: '❌ ገንዘብ ማስገባት ተሰርዟል',
+    try_again: '🔄 እንደገና ይሞክሩ',
+    
+    // Withdraw
+    withdraw_title: '🏧 በቴሌብር ገንዘብ ማውጣት',
+    withdraw_min: 'አነስተኛ መውጫ፡',
+    withdraw_process: 'በ24 ሰዓታት ውስጥ ይሰራል',
+    enter_phone: 'የቴሌብር ስልክ ቁጥርዎን ያስገቡ፡',
+    enter_amount: 'መጠን በETB ያስገቡ (አነስተኛ 50)፡',
+    withdraw_processing: '⏳ የመውጫ ጥያቄዎን እያስኬድን ነው...',
+    withdraw_success: '✅ ገንዘብ ማውጣት ተጠይቋል!',
+    withdraw_to: '📱 ወደ፡',
+    withdraw_time: '⏳ በ24 ሰዓታት ውስጥ ይሰራል።',
+    withdraw_failed: '❌ ገንዘብ ማውጣት አልተሳካም',
+    withdraw_cancel: '❌ ገንዘብ ማውጣት ተሰርዟል',
+    invalid_phone: '❌ የስልክ ቁጥር የተሳሳተ ነው። ትክክለኛ የኢትዮጵያ ስልክ ቁጥር ያስገቡ (ለምሳሌ 0911223344)፡',
+    invalid_amount: '❌ አነስተኛ መውጫ 50 ETB ነው። ትክክለኛ መጠን ያስገቡ፡',
+    
+    // Referral
+    refer_title: '🔗 ሌሎችን ጋብዝ እና ገቢ አግኝ',
+    refer_bonus: 'ለእያንዳንዱ ጋብዞት እና ገንዘብ ላስገባ ጓደኛ ',
+    refer_rewarded: '✅ የተሸለሙ፡',
+    refer_pending: '⏳ በመጠባበቅ ላይ፡',
+    refer_earned: '💰 የተገኘ አጠቃላይ፡',
+    refer_your_link: '🔗 አገናኝዎ፡',
+    refer_share: '📤 አገናኝ ያጋሩ',
+    
+    // Agent
+    agent_title: '🏢 ወኪል መሣሪያ ሰሌዳ',
+    agent_not_agent: 'በአሁኑ ጊዜ ወኪል አይደሉም።',
+    agent_contact: 'ወኪል ለመሆን እና የተጠቃሚዎች ገንዘብ ሲያስገቡ ኮሚሽን ለማግኘት አስተዳዳሪውን ያግኙ።',
+    agent_dashboard: '🏢 ወኪል መሣሪያ ሰሌዳ',
+    agent_dashboard_open: '📊 ወኪል መሣሪያ ሰሌዳ ይክፈቱ',
+    agent_share_link: '📤 የወኪል አገናኝ ያጋሩ',
+    agent_link: '🔗 የወኪል አገናኝዎ፡',
+    agent_commission: 'ይህን አገናኝ ያጋሩ — ተጠቃሚዎች በእርስዎ አገናኝ ሲመዘገቡ እና የመጀመሪያ ገንዘባቸውን ሲያስገቡ ኮሚሽን ያገኛሉ!',
+    
+    // Transactions
+    transactions: '📊 የግብይት ታሪክ',
+    no_transactions: '📊 እስካሁን ምንም ግብይቶች የሉም።',
+    last_transactions: 'የመጨረሻ 10 ግብይቶች',
+    
+    // Support
+    support_title: '🆘 የET Games ድጋፍ',
+    support_contact: 'አግኙን፡ @etgamessupport',
+    contact_support: '💬 ድጋፍ ያግኙ',
+    
+    // Help
+    help_title: '🎮 የET Games ትዕዛዞች',
+    help_start: '/start — ዋና ምናሌ',
+    help_deposit: '/deposit — በቴሌብር ገንዘብ ያስገቡ',
+    help_withdraw: '/withdraw — ገንዘብ ያውጡ',
+    help_balance: '/balance — ሒሳብ ይፈትሹ',
+    help_transactions: '/transactions — የመጨረሻ 10 ግብይቶች',
+    help_refer: '/refer — ጓደኞችን ይጋብዙ እና ያግኙ',
+    help_agent: '/agent — የወኪል መሣሪያ ሰሌዳ',
+    help_support: '/support — ድጋፍ ያግኙ',
+    help_help: '/help — ይህን መልዕክት ያሳዩ',
+    
+    // Common
+    loading: '⏳ እየተሰራ ነው...',
+    error: '❌ ስህተት ተከስቷል',
+    cancel: '❌ ሰርዝ',
+    back: '🔙 ተመለስ',
+    home: '🏠 ዋና ምናሌ',
+    confirm: '✅ አረጋግጥ',
+    success: '✅ ተሳክቷል!',
+    failed: '❌ አልተሳካም',
+    pending: '⏳ በመጠባበቅ ላይ',
+    balance_update: '📊 የተዘመነ ሒሳብ፡',
+    welcome_bonus: '🎁 የእንኳን ደህና መጣችሁ ሽልማት!',
+    play_now: '🎮 አሁን ይጫወቱ!',
+    language_switched: '🌍 ቋንቋ ተቀይሯል፡ '
+  },
+  en: {
+    // Menu buttons
+    play_games: '🎮 Play Games',
+    deposit: '💳 Deposit',
+    withdraw: '🏧 Withdraw',
+    balance: '💰 Balance',
+    refer: '🔗 Refer & Earn',
+    agent: '🏢 Agent',
+    support: '🆘 Support',
+    language: '🌍 Language',
+
+    // Welcome messages
+    welcome: '🎮 Welcome to ET Games!',
+    welcome_sub: "Ethiopia's #1 Telegram gaming platform 🎲 Ludo • 🃏 Crazy Card • 🎱 Bingo Win real ETB every day!",
+    register_btn: '🚀 Register & Play Now',
+    
+    // Registration
+    welcome_new: '🎉 Welcome to ET Games!',
+    share_phone: '📱 Share My Phone Number',
+    phone_registered: '✅ Phone number received!',
+    registration_complete: '✅ Registration complete!',
+    welcome_back: '👋 Welcome back',
+    
+    // Balance
+    your_balance: '💰 Your balance:',
+    balance_etb: 'ETB',
+    
+    // Deposit
+    deposit_title: '💳 Deposit via Telebirr',
+    deposit_step1: '📋 Step 1: Open Telebirr and send money to:',
+    deposit_step2: '📋 Step 2: After sending, copy your payment proof',
+    deposit_step3: '📋 Step 3: Paste it below',
+    deposit_prompt: 'Send your Telebirr message, link, or transaction ID now:',
+    deposit_verifying: '🔄 Verifying your payment... Please wait.',
+    deposit_success: '✅ Deposit Successful!',
+    deposit_amount: '💰 Amount:',
+    deposit_balance: '📊 New Balance:',
+    deposit_ref: '🔖 Reference:',
+    deposit_payer: '👤 Payer:',
+    deposit_failed: '❌ Deposit Failed',
+    deposit_cancel: '❌ Deposit cancelled.',
+    try_again: '🔄 Try Again',
+    
+    // Withdraw
+    withdraw_title: '🏧 Withdraw via Telebirr',
+    withdraw_min: 'Minimum withdrawal:',
+    withdraw_process: 'Processed within 24 hours',
+    enter_phone: 'Enter your Telebirr phone number:',
+    enter_amount: 'Enter the amount in ETB (minimum 50):',
+    withdraw_processing: '⏳ Processing your withdrawal request...',
+    withdraw_success: '✅ Withdrawal Requested!',
+    withdraw_to: '📱 To:',
+    withdraw_time: '⏳ Will be processed within 24 hours.',
+    withdraw_failed: '❌ Withdrawal Failed',
+    withdraw_cancel: '❌ Withdrawal cancelled.',
+    invalid_phone: '❌ Invalid phone number. Enter a valid Ethiopian phone number (e.g. 0911223344):',
+    invalid_amount: '❌ Minimum withdrawal is 50 ETB. Enter a valid amount:',
+    
+    // Referral
+    refer_title: '🔗 Refer & Earn',
+    refer_bonus: 'Invite friends and earn ',
+    refer_rewarded: '✅ Rewarded:',
+    refer_pending: '⏳ Pending:',
+    refer_earned: '💰 Total earned:',
+    refer_your_link: '🔗 Your link:',
+    refer_share: '📤 Share Link',
+    
+    // Agent
+    agent_title: '🏢 Agent Dashboard',
+    agent_not_agent: 'You are not currently an agent.',
+    agent_contact: 'To become an agent and earn commission when your referred users deposit, contact the admin.',
+    agent_dashboard: '🏢 Agent Dashboard',
+    agent_dashboard_open: '📊 Open Agent Dashboard',
+    agent_share_link: '📤 Share Agent Link',
+    agent_link: '🔗 Your Agent Link:',
+    agent_commission: 'Share this link — when users register through it and make their first deposit, you earn commission!',
+    
+    // Transactions
+    transactions: '📊 Transaction History',
+    no_transactions: '📊 No transactions yet.',
+    last_transactions: 'Last 10 Transactions',
+    
+    // Support
+    support_title: '🆘 ET Games Support',
+    support_contact: 'Contact us: @etgamessupport',
+    contact_support: '💬 Contact Support',
+    
+    // Help
+    help_title: '🎮 ET Games Commands',
+    help_start: '/start — Main menu',
+    help_deposit: '/deposit — Deposit via Telebirr',
+    help_withdraw: '/withdraw — Withdraw funds',
+    help_balance: '/balance — Check balance',
+    help_transactions: '/transactions — Last 10 transactions',
+    help_refer: '/refer — Refer friends & earn',
+    help_agent: '/agent — Agent dashboard',
+    help_support: '/support — Contact support',
+    help_help: '/help — Show this message',
+    
+    // Common
+    loading: '⏳ Loading...',
+    error: '❌ Error occurred',
+    cancel: '❌ Cancel',
+    back: '🔙 Back',
+    home: '🏠 Home',
+    confirm: '✅ Confirm',
+    success: '✅ Success!',
+    failed: '❌ Failed',
+    pending: '⏳ Pending',
+    balance_update: '📊 Updated balance:',
+    welcome_bonus: '🎁 Welcome bonus!',
+    play_now: '🎮 Play Now!',
+    language_switched: '🌍 Language switched to: '
+  }
+};
 
 // ── Keep-alive HTTP server ────────────────────────────────────
 const http = require('http');
@@ -79,6 +318,32 @@ function timeAgo(ts) {
 async function getUser(chatId) {
   const { data } = await supabase.from('users').select('*').eq('chat_id', String(chatId)).single();
   return data;
+}
+
+async function getUserLanguage(chatId) {
+  try {
+    const { data } = await supabase
+      .from('users')
+      .select('language')
+      .eq('chat_id', String(chatId))
+      .single();
+    return data?.language || 'am'; // Default to Amharic
+  } catch {
+    return 'am';
+  }
+}
+
+async function setUserLanguage(chatId, language) {
+  await supabase
+    .from('users')
+    .update({ language })
+    .eq('chat_id', String(chatId));
+}
+
+// Translation helper
+function t(key, lang) {
+  const translations = TRANSLATIONS[lang] || TRANSLATIONS.am;
+  return translations[key] || key;
 }
 
 async function fetchBalance(chatId, token) {
@@ -201,10 +466,11 @@ async function payAgentDepositCommission(userId, depositAmount, reference) {
 
     console.log(`[AGENT] ${agent.chat_id} earned ${commission} ETB deposit commission (${(rate*100).toFixed(0)}% of ${depositAmount} ETB)`);
 
+    const lang = await getUserLanguage(agent.chat_id);
     await bot.sendMessage(agent.chat_id,
-      `💳 <b>Deposit Commission Earned!</b>\n\n` +
-      `+${commission} ETB (${(rate*100).toFixed(0)}%) from a deposit by your referred user.\n` +
-      `Deposit amount: ${depositAmount} ETB`,
+      `💳 <b>${t('agent_deposit_commission', lang)}</b>\n\n` +
+      `+${commission} ETB (${(rate*100).toFixed(0)}%) ${t('from_deposit', lang)}\n` +
+      `${t('deposit_amount', lang)} ${depositAmount} ETB`,
       { parse_mode: 'HTML' }
     ).catch(() => {});
 
@@ -217,56 +483,6 @@ async function payAgentDepositCommission(userId, depositAmount, reference) {
 // DISABLED — bingo bet commission turned off, agents now only earn from deposits
 async function payAgentCommission(userId, gameId, houseCut) {
   return; // no-op — bingo commission disabled
-  try {
-    const { data: referral } = await supabase
-      .from('referrals')
-      .select('agent_id')
-      .eq('referred_id', String(userId))
-      .not('agent_id', 'is', null)
-      .single();
-
-    if (!referral?.agent_id) return;
-
-    const { data: agent } = await supabase
-      .from('agents')
-      .select('*')
-      .eq('chat_id', referral.agent_id)
-      .eq('is_active', true)
-      .single();
-
-    if (!agent) return;
-
-    const commission = Math.floor(houseCut * agent.commission_rate);
-    if (commission <= 0) return;
-
-    await creditUser(agent.chat_id, agent.username, commission, 'agent_commission', `AGENT_${gameId}`);
-
-    await supabase.from('agent_commissions').insert({
-      agent_id: agent.chat_id,
-      user_id: String(userId),
-      game: 'bingo',
-      game_id: gameId,
-      house_cut: houseCut,
-      commission,
-      created_at: new Date().toISOString()
-    });
-
-    await supabase.from('agents')
-      .update({ total_commission: (agent.total_commission || 0) + commission })
-      .eq('chat_id', agent.chat_id);
-
-    console.log(`[AGENT] ${agent.chat_id} earned ${commission} ETB commission from game ${gameId}`);
-
-    await bot.sendMessage(agent.chat_id,
-      `💰 <b>Commission Earned!</b>\n\n` +
-      `+${commission} ETB from a Bingo game played by your user.\n` +
-      `Game: <code>${gameId}</code>`,
-      { parse_mode: 'HTML' }
-    ).catch(() => {});
-
-  } catch (err) {
-    console.error('[AGENT] Commission error:', err.message);
-  }
 }
 
 // ── Referral helpers ──────────────────────────────────────────
@@ -299,8 +515,9 @@ async function rewardReferrer(referredId) {
     status: 'rewarded', rewarded_at: new Date().toISOString()
   }).eq('id', referral.id);
 
+  const lang = await getUserLanguage(referrer.chat_id);
   await bot.sendMessage(referrer.chat_id,
-    `🎉 Your referral bonus has arrived!\n\n💰 +${REFERRAL_BONUS} ETB added to your balance.\nA friend you invited just made their first deposit!`
+    `🎉 ${t('refer_bonus_received', lang)}\n\n💰 +${REFERRAL_BONUS} ETB ${t('added_to_balance', lang)}\n${t('friend_deposited', lang)}`
   ).catch(() => {});
 }
 
@@ -322,7 +539,7 @@ async function registerUser(chatId, username, phoneNumber, referrerId = null, ag
   }
 
   const { data: newUser, error } = await supabase.from('users').insert({
-    chat_id: id, username, phone_number: phoneNumber, balance: 0
+    chat_id: id, username, phone_number: phoneNumber, balance: 0, language: 'am'
   }).select().single();
 
   if (error) throw new Error(`Registration failed: ${error.message}`);
@@ -341,47 +558,54 @@ const pendingWithdraw   = new Map(); // chatId → { step: 'phone'|'amount', pho
 // ── Main Menu ─────────────────────────────────────────────────
 let WELCOME_BANNER = process.env.WELCOME_BANNER || '';
 
-// Persistent bottom keyboard — always visible
-const MAIN_KEYBOARD = {
-  keyboard: [
-    [{ text: '🎮 Play Games' }, { text: '💳 Deposit' }],
-    [{ text: '🏧 Withdraw'  }, { text: '💰 Balance'  }],
-    [{ text: '🔗 Refer & Earn' }, { text: '🏢 Agent'  }],
-    [{ text: '🆘 Support' }],
-  ],
-  resize_keyboard: true,
-  persistent: true,
-};
+// Persistent bottom keyboard — dynamically built based on language
+async function getMainKeyboard(chatId) {
+  const lang = await getUserLanguage(chatId);
+  return {
+    keyboard: [
+      [{ text: t('play_games', lang) }, { text: t('deposit', lang) }],
+      [{ text: t('withdraw', lang)  }, { text: t('balance', lang)  }],
+      [{ text: t('refer', lang) }, { text: t('agent', lang)  }],
+      [{ text: t('support', lang) }, { text: t('language', lang) }],
+    ],
+    resize_keyboard: true,
+    persistent: true,
+  };
+}
 
 async function sendMainMenu(chatId, username, balance, isNew) {
+  const lang = await getUserLanguage(chatId);
   const homeUrl = buildUrl(HOME_URL, chatId, username);
   const agentUser = await getAgent(chatId);
 
   const caption = isNew
-    ? `✅ Registration complete!\n\n👤 ${username}\n💰 Balance: ${balance} ETB\n\nWelcome to ET Games! 🎮`
-    : `👋 Welcome back ${username}!\n\n💰 Balance: ${balance} ETB\n\n🎲 Ludo · 🃏 Crazy Card · 🎱 Bingo`;
+    ? `✅ ${t('registration_complete', lang)}\n\n👤 ${username}\n💰 ${t('your_balance', lang)} ${balance} ETB\n\n${t('welcome_sub', lang)}`
+    : `👋 ${t('welcome_back', lang)} ${username}!\n\n💰 ${t('your_balance', lang)} ${balance} ETB\n\n🎲 ${t('ludo', lang)} · 🃏 ${t('crazy', lang)} · 🎱 ${t('bingo', lang)}`;
 
   const keyboard = {
     inline_keyboard: [
-      [{ text: '🎮 Open Game Hub', web_app: { url: homeUrl } }],
+      [{ text: t('play_games', lang), web_app: { url: homeUrl } }],
       [
-        { text: '💳 Deposit',       callback_data: 'deposit' },
-        { text: '🏧 Withdraw',      callback_data: 'withdraw' },
+        { text: t('deposit', lang),       callback_data: 'deposit' },
+        { text: t('withdraw', lang),      callback_data: 'withdraw' },
       ],
       [
-        { text: '📊 Transactions',  callback_data: 'transactions' },
-        { text: '💰 Balance',       callback_data: 'balance' },
+        { text: t('transactions', lang),  callback_data: 'transactions' },
+        { text: t('balance', lang),       callback_data: 'balance' },
       ],
       [
-        { text: '🔗 Refer & Earn',  callback_data: 'refer' },
-        { text: '🆘 Support',       url: SUPPORT_URL },
+        { text: t('refer', lang),  callback_data: 'refer' },
+        { text: t('support', lang),       url: SUPPORT_URL },
       ],
-      ...(agentUser ? [[{ text: '🏢 Agent Dashboard', web_app: { url: buildAgentDashboardUrl(chatId) } }]] : []),
+      [
+        { text: t('language', lang),      callback_data: 'language' },
+      ],
+      ...(agentUser ? [[{ text: t('agent_dashboard', lang), web_app: { url: buildAgentDashboardUrl(chatId) } }]] : []),
     ]
   };
 
   // First send persistent keyboard so it appears at bottom
-  await bot.sendMessage(chatId, '🎮', { reply_markup: MAIN_KEYBOARD }).catch(() => {});
+  await bot.sendMessage(chatId, '🎮', { reply_markup: await getMainKeyboard(chatId) }).catch(() => {});
 
   if (process.env.BANNER_URL) {
     try {
@@ -392,33 +616,50 @@ async function sendMainMenu(chatId, username, balance, isNew) {
   await bot.sendMessage(chatId, caption, { reply_markup: keyboard });
 }
 
+// ── Language Switcher ─────────────────────────────────────────
+async function showLanguageMenu(chatId) {
+  const lang = await getUserLanguage(chatId);
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: `🇪🇹 ${LANGUAGES.am}${lang === 'am' ? ' ✅' : ''}`, callback_data: 'lang_am' },
+        { text: `🇬🇧 ${LANGUAGES.en}${lang === 'en' ? ' ✅' : ''}`, callback_data: 'lang_en' },
+      ],
+      [{ text: t('back', lang), callback_data: 'back_to_main' }]
+    ]
+  };
+  await bot.sendMessage(chatId, `🌍 ${t('select_language', lang)}`, { reply_markup: keyboard });
+}
+
 // ── Deposit flow ──────────────────────────────────────────────
 const TELEBIRR_PHONE   = '0997515809';
 const TELEBIRR_NAME    = 'Biruuke Nigida';
 
 async function startDeposit(chatId, username) {
+  const lang = await getUserLanguage(chatId);
   pendingDeposit.set(String(chatId), true);
   await bot.sendMessage(chatId,
-    `💳 <b>Deposit via Telebirr</b>\n\n` +
-    `<b>Step 1:</b> Open Telebirr and send money to:\n` +
+    `${t('deposit_title', lang)}\n\n` +
+    `${t('deposit_step1', lang)}\n` +
     `📱 <code>${TELEBIRR_PHONE}</code>  👤 <b>${TELEBIRR_NAME}</b>\n\n` +
-    `<b>Step 2:</b> After sending, copy your payment proof\n` +
+    `${t('deposit_step2', lang)}\n` +
     `(Full SMS, receipt link, or just the transaction ID)\n\n` +
-    `<b>Step 3:</b> Paste it below 👇\n\n` +
-    `<i>Send your Telebirr message, link, or transaction ID now:</i>`,
+    `${t('deposit_step3', lang)}\n\n` +
+    `<i>${t('deposit_prompt', lang)}</i>`,
     {
       parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cancel_deposit' }]] }
+      reply_markup: { inline_keyboard: [[{ text: t('cancel', lang), callback_data: 'cancel_deposit' }]] }
     }
   );
 }
 
 async function processDeposit(chatId, username, input) {
+  const lang = await getUserLanguage(chatId);
   pendingDeposit.delete(String(chatId));
   const token = generateToken(chatId, username);
 
   const processingMsg = await bot.sendMessage(chatId,
-    `🔄 <b>Verifying your payment...</b>\n\nPlease wait, this may take a moment.`,
+    `${t('deposit_verifying', lang)}`,
     { parse_mode: 'HTML' }
   );
 
@@ -441,23 +682,23 @@ async function processDeposit(chatId, username, input) {
       const bonusLine = data.message?.includes('bonus')
         ? `\n🎁 <b>${data.message}</b>` : '';
       await bot.sendMessage(chatId,
-        `✅ <b>Deposit Successful!</b>\n\n` +
-        `💰 Amount: <b>${data.transaction?.amount?.toLocaleString() || '?'} ETB</b>${bonusLine}\n` +
-        `📊 New Balance: <b>${parseFloat(data.new_balance || 0).toLocaleString()} ETB</b>\n` +
-        `🔖 Reference: <code>${data.reference}</code>\n` +
-        `👤 Payer: ${data.transaction?.payer || 'N/A'}\n\n` +
-        `Your balance is ready\. Good luck\! 🎮`,
+        `${t('deposit_success', lang)}\n\n` +
+        `${t('deposit_amount', lang)} <b>${data.transaction?.amount?.toLocaleString() || '?'} ETB</b>${bonusLine}\n` +
+        `${t('balance_update', lang)} <b>${parseFloat(data.new_balance || 0).toLocaleString()} ETB</b>\n` +
+        `${t('deposit_ref', lang)} <code>${data.reference}</code>\n` +
+        `${t('deposit_payer', lang)} ${data.transaction?.payer || 'N/A'}\n\n` +
+        `${t('balance_ready', lang)} 🎮`,
         { parse_mode: 'HTML' }
       );
     } else {
       await bot.sendMessage(chatId,
-        `❌ <b>Deposit Failed</b>\n\n${data.error || 'Unknown error'}\n\n` +
-        `Try again with /deposit or contact @etgamessupport`,
+        `${t('deposit_failed', lang)}\n\n${data.error || t('unknown_error', lang)}\n\n` +
+        `${t('try_again_or_support', lang)}`,
         {
           parse_mode: 'HTML',
           reply_markup: { inline_keyboard: [[
-            { text: '🔄 Try Again', callback_data: 'deposit' },
-            { text: '🆘 Support', url: SUPPORT_URL }
+            { text: t('try_again', lang), callback_data: 'deposit' },
+            { text: t('support', lang), url: SUPPORT_URL }
           ]]}
         }
       );
@@ -465,7 +706,7 @@ async function processDeposit(chatId, username, input) {
   } catch (err) {
     await bot.deleteMessage(chatId, processingMsg.message_id).catch(() => {});
     await bot.sendMessage(chatId,
-      `❌ <b>Verification Error</b>\n\nYour case has been reported to admin for manual review.\n\nContact @etgamessupport if not resolved within 24h.`,
+      `❌ <b>${t('verification_error', lang)}</b>\n\n${t('manual_review', lang)}\n\n${t('contact_support_if_needed', lang)}`,
       { parse_mode: 'HTML' }
     );
   }
@@ -473,24 +714,26 @@ async function processDeposit(chatId, username, input) {
 
 // ── Withdraw flow ─────────────────────────────────────────────
 async function startWithdraw(chatId) {
+  const lang = await getUserLanguage(chatId);
   pendingWithdraw.set(String(chatId), { step: 'phone' });
   await bot.sendMessage(chatId,
-    `🏧 <b>Withdraw via Telebirr</b>\n\n` +
-    `Minimum withdrawal: <b>50 ETB</b>\n` +
-    `Processed within 24 hours\n\n` +
-    `Enter your <b>Telebirr phone number</b>:`,
+    `${t('withdraw_title', lang)}\n\n` +
+    `${t('withdraw_min', lang)} <b>50 ETB</b>\n` +
+    `${t('withdraw_process', lang)}\n\n` +
+    `${t('enter_phone', lang)}`,
     {
       parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cancel_withdraw' }]] }
+      reply_markup: { inline_keyboard: [[{ text: t('cancel', lang), callback_data: 'cancel_withdraw' }]] }
     }
   );
 }
 
 async function processWithdraw(chatId, username, phone, amount) {
+  const lang = await getUserLanguage(chatId);
   pendingWithdraw.delete(String(chatId));
   const token = generateToken(chatId, username);
 
-  const processingMsg = await bot.sendMessage(chatId, '⏳ Processing your withdrawal request...');
+  const processingMsg = await bot.sendMessage(chatId, `${t('withdraw_processing', lang)}`);
 
   try {
     const res = await fetch(`${WALLET_URL}/api/withdraw`, {
@@ -504,35 +747,36 @@ async function processWithdraw(chatId, username, phone, amount) {
 
     if (res.ok && data.success !== false) {
       await bot.sendMessage(chatId,
-        `✅ <b>Withdrawal Requested!</b>\n\n` +
-        `💰 Amount: <b>${amount} ETB</b>\n` +
-        `📱 To: <b>${phone}</b>\n\n` +
-        `⏳ Will be processed within 24 hours.`,
+        `${t('withdraw_success', lang)}\n\n` +
+        `${t('deposit_amount', lang)} <b>${amount} ETB</b>\n` +
+        `${t('withdraw_to', lang)} <b>${phone}</b>\n\n` +
+        `${t('withdraw_time', lang)}`,
         { parse_mode: 'HTML' }
       );
     } else {
       await bot.sendMessage(chatId,
-        `❌ <b>Withdrawal Failed</b>\n\n${data.error || data.message || 'Unknown error'}`,
+        `${t('withdraw_failed', lang)}\n\n${data.error || data.message || t('unknown_error', lang)}`,
         { parse_mode: 'HTML' }
       );
     }
   } catch (err) {
     await bot.deleteMessage(chatId, processingMsg.message_id).catch(() => {});
-    await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
+    await bot.sendMessage(chatId, `❌ ${t('error', lang)}: ${err.message}`);
   }
 }
 
 // ── Agent dashboard ───────────────────────────────────────────
 async function sendAgentDashboard(chatId) {
+  const lang = await getUserLanguage(chatId);
   const agent = await getAgent(chatId);
   if (!agent) {
     return bot.sendMessage(chatId,
-      `🏢 <b>Agent Program</b>\n\n` +
-      `You are not currently an agent.\n\n` +
-      `To become an agent and earn commission when your referred users deposit, contact the admin.`,
+      `${t('agent_title', lang)}\n\n` +
+      `${t('agent_not_agent', lang)}\n\n` +
+      `${t('agent_contact', lang)}`,
       {
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: '🆘 Contact Admin', url: SUPPORT_URL }]] }
+        reply_markup: { inline_keyboard: [[{ text: t('contact_support', lang), url: SUPPORT_URL }]] }
       }
     );
   }
@@ -544,16 +788,16 @@ async function sendAgentDashboard(chatId) {
   const agentLink = `https://t.me/${botInfo.username}?start=AGENT_${chatId}`;
 
   await bot.sendMessage(chatId,
-    `🏢 <b>Agent Dashboard</b>\n\n` +
-    `Tap below to open your full dashboard — see your balance, earnings, referral stats, and request withdrawals.\n\n` +
-    `🔗 <b>Your Agent Link:</b>\n<code>${agentLink}</code>\n\n` +
-    `Share this link — when users register through it and make their first deposit, you earn commission!`,
+    `${t('agent_dashboard', lang)}\n\n` +
+    `${t('agent_dashboard_desc', lang)}\n\n` +
+    `${t('agent_link', lang)}\n<code>${agentLink}</code>\n\n` +
+    `${t('agent_commission', lang)}`,
     {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '📊 Open Agent Dashboard', web_app: { url: dashboardUrl } }],
-          [{ text: '📤 Share Agent Link', url: `https://t.me/share/url?url=${encodeURIComponent(agentLink)}&text=${encodeURIComponent('Join ET Games! 🎮 Play Bingo, Ludo & win ETB!')}` }]
+          [{ text: t('agent_dashboard_open', lang), web_app: { url: dashboardUrl } }],
+          [{ text: t('agent_share_link', lang), url: `https://t.me/share/url?url=${encodeURIComponent(agentLink)}&text=${encodeURIComponent('Join ET Games! 🎮 Play Bingo, Ludo & win ETB!')}` }]
         ]
       }
     }
@@ -587,38 +831,32 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
     }
 
     // New user — show a nice welcome with inline CTA before asking for phone
+    const lang = await getUserLanguage(chatId);
     await bot.sendMessage(chatId,
-      `🎮 <b>Welcome to ET Games!</b>
-
-` +
-      `Ethiopia's #1 Telegram gaming platform\.?
-
-` +
-      `🎲 Ludo  •  🃏 Crazy Card  •  🎱 Bingo
-
-` +
-      `Win real ETB every day\!`,
+      `🎮 <b>${t('welcome', lang)}</b>\n\n` +
+      `${t('welcome_sub', lang)}`,
       {
         parse_mode: 'HTML',
         reply_markup: {
           inline_keyboard: [
-            [{ text: '🚀 Register & Play Now', callback_data: 'start_register' }],
-            [{ text: '🆘 Support', url: SUPPORT_URL }],
+            [{ text: t('register_btn', lang), callback_data: 'start_register' }],
+            [{ text: t('support', lang), url: SUPPORT_URL }],
+            [{ text: t('language', lang), callback_data: 'language' }],
           ]
         }
       }
     );
 
     const welcomeText = agentId
-      ? `👋 Welcome to *ET Games*\\!\n\nYou were invited by an agent 🎉\n\nShare your phone number to get started\\.`
+      ? `👋 ${t('welcome_agent_invite', lang)}\n\n${t('share_phone_agent', lang)}`
       : referrerId
-        ? `👋 Welcome to *ET Games*\\!\n\nYou were invited by a friend 🎉\n\nShare your phone number to register and your friend gets *${REFERRAL_BONUS} ETB* when you make your first deposit\\.`
-        : `👋 Welcome to *ET Games*\\!\n\nShare your phone number to register\\.`;
+        ? `👋 ${t('welcome_referral', lang)}\n\n${t('share_phone_referral', lang)} ${REFERRAL_BONUS} ETB ${t('when_deposit', lang)}`
+        : `👋 ${t('welcome_new', lang)}\n\n${t('share_phone_register', lang)}`;
 
     await bot.sendMessage(chatId, welcomeText, {
       parse_mode: 'MarkdownV2',
       reply_markup: {
-        keyboard: [[{ text: '📱 Share My Phone Number', request_contact: true }]],
+        keyboard: [[{ text: '📱 ' + t('share_phone', lang), request_contact: true }]],
         resize_keyboard: true, one_time_keyboard: true
       }
     });
@@ -628,7 +866,8 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
 
   } catch (e) {
     console.error('/start error:', e);
-    await bot.sendMessage(chatId, '❌ Something went wrong. Please try /start again.');
+    const lang = await getUserLanguage(chatId);
+    await bot.sendMessage(chatId, `❌ ${t('error', lang)}. ${t('try_again_start', lang)}`);
   }
 });
 
@@ -636,7 +875,10 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
 bot.onText(/\/deposit/, async (msg) => {
   const chatId = msg.chat.id;
   const user   = await getUser(chatId);
-  if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+  if (!user) {
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+  }
   await startDeposit(chatId, user.username);
 });
 
@@ -644,7 +886,10 @@ bot.onText(/\/deposit/, async (msg) => {
 bot.onText(/\/withdraw/, async (msg) => {
   const chatId = msg.chat.id;
   const user   = await getUser(chatId);
-  if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+  if (!user) {
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+  }
   await startWithdraw(chatId);
 });
 
@@ -718,10 +963,11 @@ Use /finduser ${searchVal} to search.`,
     );
 
     // Notify the new agent
+    const lang = await getUserLanguage(target.chat_id);
     await bot.sendMessage(target.chat_id,
-      `🎉 <b>You're now an ET Games Agent!</b>\n\n` +
-      `You earn <b>${(AGENT_COMMISSION_RATE * 100).toFixed(0)}%</b> of the house cut every time your referred users play Bingo.\n\n` +
-      `Use /agent to see your dashboard and referral link.`,
+      `🎉 <b>${t('agent_promoted', lang)}</b>\n\n` +
+      `${t('agent_earn', lang)} <b>${(AGENT_COMMISSION_RATE * 100).toFixed(0)}%</b> ${t('agent_earn_desc', lang)}\n\n` +
+      `${t('agent_use_dashboard', lang)}`,
       { parse_mode: 'HTML' }
     ).catch(() => {});
 
@@ -773,8 +1019,9 @@ bot.onText(/\/setdepositrate(?:\s+(.+))?/, async (msg, match) => {
       { parse_mode: 'HTML' }
     );
 
+    const lang = await getUserLanguage(agent.chat_id);
     await bot.sendMessage(agent.chat_id,
-      `📊 <b>Deposit Commission Updated</b>\n\nYour deposit commission rate is now <b>${percent}%</b> of every deposit your referred users make.`,
+      `📊 <b>${t('deposit_commission_updated', lang)}</b>\n\n${t('deposit_commission_rate', lang)} <b>${percent}%</b> ${t('of_deposits', lang)}`,
       { parse_mode: 'HTML' }
     ).catch(() => {});
 
@@ -828,7 +1075,10 @@ bot.onText(/\/agents/, async (msg) => {
 bot.onText(/\/menu/, async (msg) => {
   const chatId = msg.chat.id;
   const user   = await getUser(chatId);
-  if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+  if (!user) {
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+  }
   const token   = generateToken(chatId, user.username);
   const balance = await fetchBalance(chatId, token) ?? user.balance;
   await sendMainMenu(chatId, user.username, balance, false);
@@ -838,21 +1088,29 @@ bot.onText(/\/menu/, async (msg) => {
 bot.onText(/\/balance/, async (msg) => {
   const chatId = msg.chat.id;
   const user   = await getUser(chatId);
-  if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+  if (!user) {
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+  }
   const token   = generateToken(chatId, user.username);
   const balance = await fetchBalance(chatId, token) ?? user.balance;
-  await bot.sendMessage(chatId, `💰 Your balance: ${balance} ETB`);
+  const lang = await getUserLanguage(chatId);
+  await bot.sendMessage(chatId, `${t('your_balance', lang)} ${balance} ETB`);
 });
 
 // ── /refer ────────────────────────────────────────────────────
 bot.onText(/\/refer/, async (msg) => {
   const chatId = msg.chat.id;
   const user   = await getUser(chatId);
-  if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+  if (!user) {
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+  }
   await sendReferInfo(chatId, user);
 });
 
 async function sendReferInfo(chatId, user) {
+  const lang = await getUserLanguage(chatId);
   const botInfo  = await bot.getMe();
   const refLink  = `https://t.me/${botInfo.username}?start=REF_${chatId}`;
   const stats    = await getReferralStats(chatId);
@@ -861,16 +1119,16 @@ async function sendReferInfo(chatId, user) {
   const earned   = rewarded * REFERRAL_BONUS;
 
   await bot.sendMessage(chatId,
-    `🔗 *Refer & Earn*\n\n` +
-    `Invite friends and earn *${REFERRAL_BONUS} ETB* for every friend who deposits\\!\n\n` +
-    `✅ Rewarded: ${rewarded}\n` +
-    `⏳ Pending: ${pending}\n` +
-    `💰 Total earned: ${earned} ETB\n\n` +
-    `🔗 Your link:\n\`${refLink}\``,
+    `${t('refer_title', lang)}\n\n` +
+    `${t('refer_bonus_desc', lang)} *${REFERRAL_BONUS} ETB* ${t('refer_bonus_desc2', lang)}\n\n` +
+    `✅ ${t('refer_rewarded', lang)} ${rewarded}\n` +
+    `⏳ ${t('refer_pending', lang)} ${pending}\n` +
+    `💰 ${t('refer_earned', lang)} ${earned} ETB\n\n` +
+    `${t('refer_your_link', lang)}\n\`${refLink}\``,
     {
       parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: [[
-        { text: '📤 Share Link', url: `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Join ET Games and win ETB! 🎮')}` }
+        { text: t('refer_share', lang), url: `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Join ET Games and win ETB! 🎮')}` }
       ]]}
     }
   );
@@ -880,13 +1138,17 @@ async function sendReferInfo(chatId, user) {
 bot.onText(/\/transactions/, async (msg) => {
   const chatId = msg.chat.id;
   const user   = await getUser(chatId);
-  if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+  if (!user) {
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+  }
   await sendTransactionsMsg(chatId, user);
 });
 
 async function sendTransactionsMsg(chatId, user) {
+  const lang = await getUserLanguage(chatId);
   const txs = await fetchTransactions(chatId);
-  if (!txs.length) return bot.sendMessage(chatId, '📊 No transactions yet.');
+  if (!txs.length) return bot.sendMessage(chatId, `${t('no_transactions', lang)}`);
   const token   = generateToken(chatId, user.username);
   const balance = await fetchBalance(chatId, token) ?? user.balance;
   const lines   = txs.map(tx => {
@@ -896,30 +1158,34 @@ async function sendTransactionsMsg(chatId, user) {
     const emoji  = type === 'deposit' ? '🔵' : type === 'credit' ? '🟢' : '🔴';
     return `${emoji} ${sign}${amount} ETB  •  ${type}  •  ${timeAgo(tx.created_at)}`;
   });
-  await bot.sendMessage(chatId, `📊 Last 10 Transactions\n💰 Balance: ${balance} ETB\n\n${lines.join('\n')}`);
+  await bot.sendMessage(chatId, `${t('transactions', lang)}\n💰 ${t('your_balance', lang)} ${balance} ETB\n\n${lines.join('\n')}`);
 }
 
 // ── /support ──────────────────────────────────────────────────
 bot.onText(/\/support/, async (msg) => {
-  await bot.sendMessage(msg.chat.id,
-    `🆘 *ET Games Support*\n\nContact us: @etgamessupport`,
-    { parse_mode: 'MarkdownV2', reply_markup: { inline_keyboard: [[{ text: '💬 Contact Support', url: SUPPORT_URL }]] } }
+  const chatId = msg.chat.id;
+  const lang = await getUserLanguage(chatId);
+  await bot.sendMessage(chatId,
+    `${t('support_title', lang)}\n\n${t('support_contact', lang)}`,
+    { parse_mode: 'MarkdownV2', reply_markup: { inline_keyboard: [[{ text: t('contact_support', lang), url: SUPPORT_URL }]] } }
   );
 });
 
 // ── /help ─────────────────────────────────────────────────────
 bot.onText(/\/help/, async (msg) => {
-  await bot.sendMessage(msg.chat.id,
-    `🎮 <b>ET Games Commands</b>\n\n` +
-    `/start — Main menu\n` +
-    `/deposit — Deposit via Telebirr\n` +
-    `/withdraw — Withdraw funds\n` +
-    `/balance — Check balance\n` +
-    `/transactions — Last 10 transactions\n` +
-    `/refer — Refer friends & earn ${REFERRAL_BONUS} ETB\n` +
-    `/agent — Agent dashboard (if you're an agent)\n` +
-    `/support — Contact support\n` +
-    `/help — Show this message`,
+  const chatId = msg.chat.id;
+  const lang = await getUserLanguage(chatId);
+  await bot.sendMessage(chatId,
+    `${t('help_title', lang)}\n\n` +
+    `${t('help_start', lang)}\n` +
+    `${t('help_deposit', lang)}\n` +
+    `${t('help_withdraw', lang)}\n` +
+    `${t('help_balance', lang)}\n` +
+    `${t('help_transactions', lang)}\n` +
+    `${t('help_refer', lang)}\n` +
+    `${t('help_agent', lang)}\n` +
+    `${t('help_support', lang)}\n` +
+    `${t('help_help', lang)}`,
     { parse_mode: 'HTML' }
   );
 });
@@ -943,7 +1209,11 @@ bot.onText(/\/broadcast ([\s\S]+)/, async (msg, match) => {
   let sent = 0, failed = 0;
   await bot.sendMessage(chatId, `📢 Broadcasting to ${users.length} users...`);
   for (const user of users) {
-    try { await bot.sendMessage(user.chat_id, `📢 <b>Announcement</b>\n\n${text}`, { parse_mode: 'HTML' }); sent++; }
+    try { 
+      const lang = await getUserLanguage(user.chat_id);
+      await bot.sendMessage(user.chat_id, `📢 <b>${t('announcement', lang)}</b>\n\n${text}`, { parse_mode: 'HTML' }); 
+      sent++; 
+    }
     catch { failed++; }
     await new Promise(r => setTimeout(r, 50));
   }
@@ -1051,21 +1321,49 @@ bot.on('callback_query', async (query) => {
   await bot.answerCallbackQuery(query.id);
   const user = await getUser(chatId);
 
+  // Language selection
+  if (query.data === 'language') {
+    return showLanguageMenu(chatId);
+  }
+  if (query.data === 'lang_am' || query.data === 'lang_en') {
+    const newLang = query.data === 'lang_am' ? 'am' : 'en';
+    await setUserLanguage(chatId, newLang);
+    const lang = newLang;
+    await bot.sendMessage(chatId, `${t('language_switched', lang)} ${LANGUAGES[newLang]}`);
+    // Update keyboard
+    if (user) {
+      const token = generateToken(chatId, user.username);
+      const balance = await fetchBalance(chatId, token) ?? user.balance;
+      await sendMainMenu(chatId, user.username, balance, false);
+    } else {
+      // If no user, just update the keyboard
+      await bot.sendMessage(chatId, '🎮', { reply_markup: await getMainKeyboard(chatId) });
+    }
+    return;
+  }
+  if (query.data === 'back_to_main') {
+    if (user) {
+      const token = generateToken(chatId, user.username);
+      const balance = await fetchBalance(chatId, token) ?? user.balance;
+      await sendMainMenu(chatId, user.username, balance, false);
+    } else {
+      await bot.sendMessage(chatId, '🎮', { reply_markup: await getMainKeyboard(chatId) });
+    }
+    return;
+  }
+
   // Register button on welcome screen
   if (query.data === 'start_register') {
+    const lang = await getUserLanguage(chatId);
     const welcomeText = pendingAgentRefs.has(String(chatId))
-      ? `🎉 You were invited by an agent!
-
-Share your phone number to join ET Games and get started:`
+      ? `🎉 ${t('welcome_agent_invite', lang)}\n\n${t('share_phone_agent', lang)}`
       : pendingReferrals.has(String(chatId))
-        ? `🎉 You were invited by a friend!
-
-Share your phone to register — your friend gets ${REFERRAL_BONUS} ETB when you deposit!`
-        : `📱 Share your phone number to create your account:`;
+        ? `🎉 ${t('welcome_referral', lang)}\n\n${t('share_phone_referral', lang)} ${REFERRAL_BONUS} ETB ${t('when_deposit', lang)}`
+        : `${t('share_phone_register', lang)}`;
 
     await bot.sendMessage(chatId, welcomeText, {
       reply_markup: {
-        keyboard: [[{ text: '📱 Share My Phone Number', request_contact: true }]],
+        keyboard: [[{ text: '📱 ' + t('share_phone', lang), request_contact: true }]],
         resize_keyboard: true, one_time_keyboard: true
       }
     });
@@ -1073,26 +1371,38 @@ Share your phone to register — your friend gets ${REFERRAL_BONUS} ETB when you
   }
 
   if (query.data === 'deposit') {
-    if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+    if (!user) {
+      const lang = await getUserLanguage(chatId);
+      return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+    }
     return startDeposit(chatId, user.username);
   }
   if (query.data === 'cancel_deposit') {
     pendingDeposit.delete(String(chatId));
-    return bot.sendMessage(chatId, '❌ Deposit cancelled.');
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `${t('deposit_cancel', lang)}`);
   }
   if (query.data === 'withdraw') {
-    if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+    if (!user) {
+      const lang = await getUserLanguage(chatId);
+      return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+    }
     return startWithdraw(chatId);
   }
   if (query.data === 'cancel_withdraw') {
     pendingWithdraw.delete(String(chatId));
-    return bot.sendMessage(chatId, '❌ Withdrawal cancelled.');
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `${t('withdraw_cancel', lang)}`);
   }
-  if (!user) return bot.sendMessage(chatId, '❌ Please /start first.');
+  if (!user) {
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `❌ ${t('please_start', lang)}`);
+  }
   if (query.data === 'balance') {
     const token   = generateToken(chatId, user.username);
     const balance = await fetchBalance(chatId, token) ?? user.balance;
-    return bot.sendMessage(chatId, `💰 Your balance: ${balance} ETB`);
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `${t('your_balance', lang)} ${balance} ETB`);
   }
   if (query.data === 'transactions') return sendTransactionsMsg(chatId, user);
   if (query.data === 'refer')        return sendReferInfo(chatId, user);
@@ -1104,24 +1414,28 @@ bot.on('message', async (msg) => {
   const chatId   = String(msg.chat.id);
   const text     = msg.text.trim();
   const user     = await getUser(chatId);
+  const lang = await getUserLanguage(chatId);
 
   // Handle persistent keyboard buttons
   if (user) {
-    if (text === '🎮 Play Games') {
+    if (text === t('play_games', lang) || text === '🎮 ጨዋታዎች' || text === '🎮 Play Games') {
       const homeUrl = buildUrl(HOME_URL, chatId, user.username);
-      return bot.sendMessage(chatId, '🎮 Opening Game Hub...', {
-        reply_markup: { inline_keyboard: [[{ text: '🎮 Open Game Hub', web_app: { url: homeUrl } }]] }
+      return bot.sendMessage(chatId, `${t('opening_games', lang)}`, {
+        reply_markup: { inline_keyboard: [[{ text: t('play_games', lang), web_app: { url: homeUrl } }]] }
       });
     }
-    if (text === '💳 Deposit')     return startDeposit(chatId, user.username);
-    if (text === '🏧 Withdraw')    return startWithdraw(chatId);
-    if (text === '🆘 Support')     return bot.sendMessage(chatId, `Contact support: @etgamessupport`, { reply_markup: { inline_keyboard: [[{ text: '💬 Contact Support', url: SUPPORT_URL }]] } });
-    if (text === '🏢 Agent')       return sendAgentDashboard(chatId);
-    if (text === '🔗 Refer & Earn') return sendReferInfo(chatId, user);
-    if (text === '💰 Balance') {
+    if (text === t('deposit', lang) || text === '💳 ገንዘብ አስገባ' || text === '💳 Deposit')     return startDeposit(chatId, user.username);
+    if (text === t('withdraw', lang) || text === '🏧 ገንዘብ አውጣ' || text === '🏧 Withdraw')    return startWithdraw(chatId);
+    if (text === t('support', lang) || text === '🆘 ድጋፍ' || text === '🆘 Support')     return bot.sendMessage(chatId, `${t('support_contact', lang)}`, { reply_markup: { inline_keyboard: [[{ text: t('contact_support', lang), url: SUPPORT_URL }]] } });
+    if (text === t('agent', lang) || text === '🏢 ወኪል' || text === '🏢 Agent')       return sendAgentDashboard(chatId);
+    if (text === t('refer', lang) || text === '🔗 ሌሎችን ጋብዝ' || text === '🔗 Refer & Earn') return sendReferInfo(chatId, user);
+    if (text === t('balance', lang) || text === '💰 ሒሳብ' || text === '💰 Balance') {
       const token   = generateToken(chatId, user.username);
       const balance = await fetchBalance(chatId, token) ?? user.balance;
-      return bot.sendMessage(chatId, `💰 Your balance: <b>${balance} ETB</b>`, { parse_mode: 'HTML' });
+      return bot.sendMessage(chatId, `${t('your_balance', lang)} <b>${balance} ETB</b>`, { parse_mode: 'HTML' });
+    }
+    if (text === t('language', lang) || text === '🌍 ቋንቋ' || text === '🌍 Language') {
+      return showLanguageMenu(chatId);
     }
   }
 
@@ -1140,19 +1454,19 @@ bot.on('message', async (msg) => {
       // Validate phone
       const phone = text.replace(/\s/g, '');
       if (!/^(\+251|0251|251|09|07)\d{8,9}$/.test(phone)) {
-        return bot.sendMessage(chatId, '❌ Invalid phone number. Enter a valid Ethiopian phone number (e.g. 0911223344):');
+        return bot.sendMessage(chatId, `${t('invalid_phone', lang)}`);
       }
       pendingWithdraw.set(chatId, { step: 'amount', phone });
       return bot.sendMessage(chatId,
-        `📱 Phone: <b>${phone}</b>\n\nNow enter the <b>amount in ETB</b> (minimum 50):`,
-        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cancel_withdraw' }]] } }
+        `📱 ${t('withdraw_to', lang)} <b>${phone}</b>\n\n${t('enter_amount', lang)}`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: t('cancel', lang), callback_data: 'cancel_withdraw' }]] } }
       );
     }
 
     if (state.step === 'amount') {
       const amount = parseFloat(text);
       if (isNaN(amount) || amount < 50) {
-        return bot.sendMessage(chatId, '❌ Minimum withdrawal is 50 ETB. Enter a valid amount:');
+        return bot.sendMessage(chatId, `${t('invalid_amount', lang)}`);
       }
       return processWithdraw(chatId, user.username, state.phone, amount);
     }
@@ -1163,7 +1477,10 @@ bot.on('message', async (msg) => {
 bot.on('contact', async (msg) => {
   const chatId  = msg.chat.id;
   const contact = msg.contact;
-  if (contact.user_id !== chatId) return bot.sendMessage(chatId, '❌ Please share your own phone number.');
+  if (contact.user_id !== chatId) {
+    const lang = await getUserLanguage(chatId);
+    return bot.sendMessage(chatId, `❌ ${t('share_own_phone', lang)}`);
+  }
 
   const username   = msg.from.username || msg.from.first_name || `User${String(chatId).slice(-4)}`;
   const referrerId = pendingReferrals.get(String(chatId)) || null;
@@ -1174,7 +1491,8 @@ bot.on('contact', async (msg) => {
     pendingReferrals.delete(String(chatId));
     pendingAgentRefs.delete(String(chatId));
 
-    await bot.sendMessage(chatId, '✅ Phone number received!', { reply_markup: { remove_keyboard: true } });
+    const lang = await getUserLanguage(chatId);
+    await bot.sendMessage(chatId, `${t('phone_registered', lang)}`, { reply_markup: { remove_keyboard: true } });
 
     const WELCOME_BONUS_ENABLED = process.env.WELCOME_BONUS !== 'false';
     if (isNew && WELCOME_BONUS_ENABLED) {
@@ -1194,11 +1512,11 @@ bot.on('contact', async (msg) => {
         user.balance = bonusData.new_balance || 10;
 
         const welcomeMsg =
-          `🎉 <b>Welcome to ET Games!</b>\n\n` +
-          `You received a <b>FREE 10 ETB</b> welcome bonus! 🎁\n\n` +
-          `Your balance: <b>${user.balance} ETB</b> — start playing now!`;
+          `🎉 <b>${t('welcome_new', lang)}</b>\n\n` +
+          `${t('welcome_bonus', lang)} 🎁\n\n` +
+          `${t('your_balance', lang)} <b>${user.balance} ETB</b> — ${t('start_playing', lang)}`;
 
-        const welcomeKeyboard = { inline_keyboard: [[{ text: '🎮 Play Now!', web_app: { url: buildUrl(HOME_URL, chatId, username) } }]] };
+        const welcomeKeyboard = { inline_keyboard: [[{ text: t('play_now', lang), web_app: { url: buildUrl(HOME_URL, chatId, username) } }]] };
 
         if (WELCOME_BANNER) {
           await bot.sendPhoto(chatId, WELCOME_BANNER, { caption: welcomeMsg, parse_mode: 'HTML', reply_markup: welcomeKeyboard }).catch(
@@ -1213,7 +1531,8 @@ bot.on('contact', async (msg) => {
     await sendMainMenu(chatId, username, user.balance, isNew);
   } catch (e) {
     console.error('Contact error:', e);
-    await bot.sendMessage(chatId, '❌ Registration failed. Please try /start again.');
+    const lang = await getUserLanguage(chatId);
+    await bot.sendMessage(chatId, `❌ ${t('registration_failed', lang)} ${t('try_again_start', lang)}`);
   }
 });
 
@@ -1233,7 +1552,11 @@ bot.on('photo', async (msg) => {
     await bot.sendMessage(chatId, `📢 Sending photo to ${users.length} users...`);
     let sent = 0, failed = 0;
     for (const user of users) {
-      try { await bot.sendPhoto(user.chat_id, fileId, { caption: text, parse_mode: 'HTML' }); sent++; }
+      try { 
+        const lang = await getUserLanguage(user.chat_id);
+        await bot.sendPhoto(user.chat_id, fileId, { caption: `📢 <b>${t('announcement', lang)}</b>\n\n${text}`, parse_mode: 'HTML' }); 
+        sent++; 
+      }
       catch { failed++; }
       await new Promise(r => setTimeout(r, 60));
     }
