@@ -18,6 +18,10 @@ const SUPPORT_URL  = 'https://t.me/etgamessupport';
 const REFERRAL_BONUS = 10;
 const AGENT_COMMISSION_RATE = 0.20; // 20% of house cut
 
+// Deposit bonus configuration (kept in sync with server)
+const BONUS_ON_EVERY_DEPOSIT = (process.env.BONUS_ON_EVERY_DEPOSIT || '').toLowerCase() === 'true';
+const DEPOSIT_BONUS_PERCENT = parseFloat(process.env.DEPOSIT_BONUS_PERCENT || '10');
+
 // URL of the admin-dashboard service, which now also hosts the agent portal
 const AGENT_DASHBOARD_URL = process.env.AGENT_DASHBOARD_URL || 'https://adminpage-gsgg.onrender.com';
 // Secret used to sign agent login tokens — must match AGENT_TOKEN_SECRET on
@@ -638,6 +642,11 @@ const TELEBIRR_NAME    = 'Biruuke Nigida';
 async function startDeposit(chatId, username) {
   const lang = await getUserLanguage(chatId);
   pendingDeposit.set(String(chatId), true);
+  const percent = isNaN(DEPOSIT_BONUS_PERCENT) ? 10 : DEPOSIT_BONUS_PERCENT;
+  const bonusNote = BONUS_ON_EVERY_DEPOSIT
+    ? `\n🎁 Bonus: <b>${percent}% of your deposit will be awarded as bonus</b>`
+    : `\n🎁 Note: First deposit may receive a bonus (configurable)`;
+
   await bot.sendMessage(chatId,
     `${t('deposit_title', lang)}\n\n` +
     `${t('deposit_step1', lang)}\n` +
@@ -645,7 +654,7 @@ async function startDeposit(chatId, username) {
     `${t('deposit_step2', lang)}\n` +
     `(Full SMS, receipt link, or just the transaction ID)\n\n` +
     `${t('deposit_step3', lang)}\n\n` +
-    `<i>${t('deposit_prompt', lang)}</i>`,
+    `<i>${t('deposit_prompt', lang)}</i>` + bonusNote,
     {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: [[{ text: t('cancel', lang), callback_data: 'cancel_deposit' }]] }
