@@ -636,8 +636,8 @@ async function showLanguageMenu(chatId) {
 }
 
 // ── Deposit flow ──────────────────────────────────────────────
-const TELEBIRR_PHONE   = '0997515809';
-const TELEBIRR_NAME    = 'Biruuke Nigida';
+const TELEBIRR_PHONE   = '0997576935';
+const TELEBIRR_NAME    = 'alazar';
 
 async function startDeposit(chatId, username) {
   const lang = await getUserLanguage(chatId);
